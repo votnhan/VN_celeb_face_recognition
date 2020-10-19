@@ -24,8 +24,11 @@ def split_train_val(desc_file, output_train, output_val):
 
     dict_train, dict_val = {}, {}
     for k, v in dict_labels.items():
-        dict_train[k] = v[:-1]
-        dict_val[k] = [v[-1]]
+        if len(v) > 1:
+            dict_train[k] = v[:-1]
+            dict_val[k] = [v[-1]]
+        else:
+            dict_train[k] = [v[0]]
 
     write_json(output_train, dict_train)
     write_json(output_val, dict_val)
