@@ -20,7 +20,7 @@
         "name": "VNCelebDataset",
         "args":{
             "data_dir": "data",
-            "label_file": "val.json",
+            "label_file": "val.json"
         }
     },
     "val_data_loader":{

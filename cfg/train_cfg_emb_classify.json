@@ -47,7 +47,7 @@
     "model": {
         "name": "MLPModel",
         "args": {
-            "input_dim": "512",
+            "input_dim": 512,
             "num_classes": 1000
         }
     },

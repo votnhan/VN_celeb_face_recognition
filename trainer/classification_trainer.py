@@ -88,7 +88,7 @@ class ClassificationTrainer(BaseTrainer):
         message_loss = 'Train Epoch: {} [{}]/[{}] with {}, Loss: {:.6f}'.\
                                 format(epoch, 
                                 batch_idx, len(self.train_loader), 
-                                self.criterion.__name__,
+                                self.criterion.__class__.__name__,
                                 self.train_loss.avg(self.config['loss']))
 
         message_metrics = self.gen_message_log_for_metrics(self.train_metrics)

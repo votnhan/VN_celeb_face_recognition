@@ -55,7 +55,7 @@ def cal_embedding(data_dir, batch_size, model, transforms, output_dir, device):
         print('Processing for {}/{} batchs:'.format(idx, n_batchs))
         tensors = create_image_tensors(data_dir_path, batch_file, transforms)
         tensors = tensors.to(device)
-        embeddings = model(tensors).cpu().numpy()
+        embeddings = model(tensors).detach().cpu().numpy()
         save_embeddings(embeddings, batch_file, output_dir)
 
 
