@@ -2,11 +2,12 @@ import torch
 import os
 import pandas as pd
 import numpy as np
+from copy import deepcopy
 from torch.utils.data import Dataset
 from pathlib import Path
 from torchvision import transforms as tf
 from PIL import Image
-from ..utils import read_json
+from utils import read_json
 
 class VNCelebDataset(Dataset):
     def __init__(self, data_dir, label_file, transforms=None):
@@ -37,10 +38,10 @@ class VNCelebDataset(Dataset):
 
     def _get_list_samples_labels(self):
         samples, labels = [], []
-        for i in range(self.n_classes):
-            sample_for_cls = self.label_dict[str(i)]
+        for k, v in self.label_dict.items():
+            sample_for_cls = deepcopy(v)
             sample_for_cls.sort()
             samples += sample_for_cls
-            labels += len(sample_for_cls)*[i]
+            labels += len(sample_for_cls)*[int(k)]
         
         return samples, labels

@@ -1,10 +1,10 @@
 import torch
-from base_trainer import BaseTrainer
+from .base_trainer import BaseTrainer
 from torch.optim.lr_scheduler import ReduceLROnPlateau
 
 class ClassificationTrainer(BaseTrainer):
     def __init__(self, config, model, loss, metrics, optimizer, lr_scheduler):
-        super.__init__(config, model, loss, metrics, optimizer, lr_scheduler)
+        super().__init__(config, model, loss, metrics, optimizer, lr_scheduler)
 
     def _train_epoch(self, epoch):
         self.model.train()

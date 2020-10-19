@@ -262,6 +262,10 @@ class InceptionResnetV1(nn.Module):
             load_weights(self, pretrained)
 
         if self.classify and self.num_classes is not None:
+            # Freeze weight of model
+            for param in self.parameters():
+                param.requires_grad = False
+
             self.logits = nn.Linear(512, self.num_classes)
 
         self.device = torch.device('cpu')
@@ -297,6 +301,7 @@ class InceptionResnetV1(nn.Module):
         x = self.last_bn(x)
         if self.classify:
             x = self.logits(x)
+            x = F.log_softmax(x)
         else:
             x = F.normalize(x, p=2, dim=1)
         return x

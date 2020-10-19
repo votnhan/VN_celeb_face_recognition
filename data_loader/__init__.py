@@ -1,3 +1,4 @@
+import torch
 import numpy as np
 from torchvision import transforms as tf
 from .vn_celeb_dataset import VNCelebDataset
