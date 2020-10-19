@@ -2,6 +2,7 @@ import torch
 import numpy as np
 from torchvision import transforms as tf
 from .vn_celeb_dataset import VNCelebDataset
+from .vn_celeb_emb_dataset import VNCelebEmbDataset 
 
 fixed_size = 160
 

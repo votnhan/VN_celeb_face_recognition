@@ -30,7 +30,7 @@ class VNCelebDataset(Dataset):
             transform = tf.ToTensor()
             data_tensor = transform(img)
 
-        return data_tensor, label, img_path
+        return data_tensor, label, str(img_path)
 
 
     def __len__(self):

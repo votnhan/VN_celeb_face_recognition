@@ -85,9 +85,10 @@ class ClassificationTrainer(BaseTrainer):
 
     
     def log_for_step(self, epoch, batch_idx):
-        message_loss = 'Train Epoch: {} [{}]/[{}] Categorical CE Loss: {:.6f}'.\
+        message_loss = 'Train Epoch: {} [{}]/[{}] with {}, Loss: {:.6f}'.\
                                 format(epoch, 
                                 batch_idx, len(self.train_loader), 
+                                self.criterion.__name__,
                                 self.train_loss.avg(self.config['loss']))
 
         message_metrics = self.gen_message_log_for_metrics(self.train_metrics)

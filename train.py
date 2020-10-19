@@ -4,8 +4,8 @@ import torch
 import numpy as np
 from torch.utils.data import DataLoader
 from utils import read_json
-from data_loader import VNCelebDataset
-from data_loader import transforms
+from data_loader import transforms as default_tf
+import data_loader as dataset_md
 import losses as loss_md
 import models as model_md
 import trainer as trainer_md
@@ -19,23 +19,25 @@ torch.backends.cudnn.benchmark = True
 np.random.seed(SEED)
 
 def main(config):
+    # Create transforms
+    if config['transforms'] == 'default':
+        transforms = default_tf
+    else:
+        transforms = None
+
     # Create train dataloader
-    train_ds_cfg = config['train_data_loader']['args']
-    train_dataset = VNCelebDataset(train_ds_cfg['data_dir'], 
-                            train_ds_cfg['label_file'], 
-                            transforms=transforms)
-    train_loader = DataLoader(train_dataset, train_ds_cfg['batch_size'], 
-                            train_ds_cfg['shuffle'], 
-                            num_workers=train_ds_cfg['num_workers'])
+    train_dataset = getattr(dataset_md, config['train_dataset']['name'])(**\
+                    config['train_dataset']['args'], transforms=transforms) 
+                            
+    train_loader_cfg = config['train_data_loader']['args']
+    train_loader = DataLoader(dataset=train_dataset, **train_loader_cfg)
 
     # Create validation dataloader
-    val_ds_cfg = config['val_data_loader']['args']
-    val_dataset = VNCelebDataset(val_ds_cfg['data_dir'], 
-                            val_ds_cfg['label_file'], 
-                            transforms=transforms)
-    val_loader = DataLoader(val_dataset, val_ds_cfg['batch_size'], 
-                            val_ds_cfg['shuffle'], 
-                            num_workers=val_ds_cfg['num_workers'])
+    val_dataset = getattr(dataset_md, config['val_dataset']['name'])(**\
+                    config['val_dataset']['args'], transforms=transforms)
+
+    val_loader_cfg = config['val_data_loader']['args']
+    val_loader = DataLoader(dataset=val_dataset, **val_loader_cfg)
 
     # Create classification model
     model = getattr(model_md, config['model']['name'])(**config['model']['args'])

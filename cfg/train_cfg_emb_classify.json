@@ -1,21 +1,31 @@
 {
     "name": "VietNam Celeb Challenge",
     "data_path": "data",
+    "train_dataset":{
+        "name": "VNCelebEmbDataset",
+        "args": {
+            "data_dir": "train_emb",
+            "label_file": "train.json"
+        }
+    },
     "train_data_loader":{
         "name": "VNCeleb training dataloader",
         "args": {
-            "data_dir": "data",
-            "label_file": "train.json",
             "batch_size": 64,
             "shuffle": true, 
             "num_workers": 0
         }
     },
+    "val_dataset":{
+        "name": "VNCelebEmbDataset",
+        "args":{
+            "data_dir": "train_emb",
+            "label_file": "val.json"
+        }
+    },
     "val_data_loader":{
         "name": "VNCeleb validation dataloader",
         "args": {
-            "data_dir": "data",
-            "label_file": "val.json",
             "batch_size": 32,
             "shuffle": false,
             "num_workers": 0
@@ -31,13 +41,13 @@
             "num_workers": 0
         }
     },
+    "transforms": "none",
     "metrics": ["accuracy"],
     "loss": "neg_log_llhood",
     "model": {
-        "name": "InceptionResnetV1",
+        "name": "MLPModel",
         "args": {
-            "pretrained": "vggface2",
-            "classify": true,
+            "input_dim": "512",
             "num_classes": 1000
         }
     },
