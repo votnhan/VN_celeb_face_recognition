@@ -11,6 +11,6 @@ class MLPModel(nn.Module):
         x = F.relu(self.dense_1(input))
         x = F.dropout(x, p=0.25, training=self.training)
         x = self.dense_2(x)
-        output = F.log_softmax(x)
+        output = F.log_softmax(x, dim=1)
         return output
 
