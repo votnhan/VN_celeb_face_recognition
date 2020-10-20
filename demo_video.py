@@ -1,7 +1,9 @@
 import cv2
 import os
 import argparse
+import glob
 import pandas as pd
+from pathlib import Path
 from utils import read_image
 from models import MTCNN, InceptionResnetV1, MLPModel
 from demo_image import detech_faces, find_embedding, identify_person, \
@@ -19,6 +21,26 @@ def recognize_faces_image(np_image, detect_model, embedding_model,
     else:
         return np_image, None
 
+def export_video_face_recognition(output_frame_dir, fps, output_path):
+    container_path = Path(output_frame_dir)
+    image_files = glob.glob(str(container_path / '*'))
+    n_images = len(image_files)
+    size = None
+    first_img_path = container_path / 'frame_{}.png'.format(1)
+    first_img = cv2.imread(str(first_img_path))
+    height, width, channels = first_img.shape
+    size = (width, height)
+    out_writer = cv2.VideoWriter(output_path, 
+                    cv2.VideoWriter_fourcc(*'MP4V'), fps, size)
+
+    for i in range(1, n_images + 1):
+        img_path = container_path / 'frame_{}.png'.format(i)
+        img = cv2.imread(str(img_path))
+        out_writer.write(img)
+
+    out_writer.release()
+    print('Save exported video in {} ...'.format(output_path))
+        
 
 def main(args, detect_model, embedding_model, classify_model, device, 
             label2name_df):
@@ -76,6 +98,8 @@ if __name__ == '__main__':
     args_parser.add_argument('-dv', '--device', default='GPU', type=str) 
     args_parser.add_argument('-id', '--input_dim_emb', default=512, type=int) 
     args_parser.add_argument('-nc', '--num_classes', default=1000, type=int)
+    args_parser.add_argument('-ov', '--output_video', default='', type=str)
+    args_parser.add_argument('-fps', '--fps_video', default=25.0, type=float)
 
     args = args_parser.parse_args()
 
@@ -97,4 +121,6 @@ if __name__ == '__main__':
     load_model_classify(args.classify_model, classify_model)
     classify_model = classify_model.to(device)
     main(args, mtcnn, emb_model, classify_model, device, label2name_df)
-
+    if args.output_video != '':
+        export_video_face_recognition(args.output_frame, args.fps_video, 
+            args.args.output_video)
