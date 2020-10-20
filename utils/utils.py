@@ -2,6 +2,7 @@ import os
 import json
 import matplotlib.pyplot as plt
 import pandas as pd
+from PIL import Image
 
 class MetricTracker:
     def __init__(self, *keys, writer=None):
@@ -47,6 +48,10 @@ def create_folder(path):
 def save_pandas_df(data, filename, index, columns, use_index=True):
     df = pd.DataFrame(data=data, index=index, columns=columns)
     df.to_csv(filename, index=use_index)
+
+def read_image(image_path):
+    image = Image.open(image_path)
+    return image
 
 def append_log_to_file(file_path, list_items):
     with open(file_path, 'a') as opened_file:
