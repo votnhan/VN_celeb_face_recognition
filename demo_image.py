@@ -17,6 +17,7 @@ def load_model_classify(checkpoint_path, model):
     
 
 def detech_faces(image, detect_model):
+    detect_model.eval()
     cropped_images_ts, batch_boxes = detect_model(image)
     return cropped_images_ts, batch_boxes
 
@@ -27,8 +28,9 @@ def find_embedding(image_tensor, embedding_model):
     return embeddings.detach()
 
 def identify_person(embeddings, classify_model, name_df):
+    classify_model.eval()
     output = classify_model(embeddings)
-    preditions = torch.argmax(output, dim=0)
+    preditions = torch.argmax(output, dim=1)
     preditions_np = preditions.detach().cpu().numpy()
     list_names = []
     for pred in preditions_np:
@@ -41,10 +43,7 @@ def identify_person(embeddings, classify_model, name_df):
     return list_names
 
 def draw_boxes_on_image(image, boxes, list_names, output_path):
-    np_image = image
-    if type(image) is Image:
-        np_image = np.array(image)
-    
+    np_image = np.array(image)
     for box, name in zip(boxes, list_names):
         cv2.rectangle(np_image, (box[0], box[1]), (box[2], box[3]), 
                         (0, 255, 0), 2)
@@ -60,6 +59,7 @@ if __name__ == '__main__':
                     recognition on a image')
 
     args_parser.add_argument('-fs', '--face_size', default=160, type = int)
+    args_parser.add_argument('-mfs', '--min_face_size', default=50, type=int)
     args_parser.add_argument('-i', '--image_path', default='demo.png', type=str)
     args_parser.add_argument('-o', '--output_path', default='demo_recognition.png', 
                                 type=str)
@@ -83,7 +83,8 @@ if __name__ == '__main__':
     # Prepare 3 models, database for label to name
     label2name_df = pd.read_csv(args.label2name)
     # face detection model
-    mtcnn = MTCNN(args.face_size, keep_all=True, device=device)
+    mtcnn = MTCNN(args.face_size, keep_all=True, device=device, 
+                    min_face_size=args.min_face_size)
 
     # face embedding model
     emb_model = InceptionResnetV1(args.pre_trained_emb, device=device)
@@ -96,7 +97,7 @@ if __name__ == '__main__':
     # Do face recognition process
     pil_image = read_image(args.image_path)
     tensors_face, boxes = detech_faces(pil_image, mtcnn)
-    embeddings = find_embedding(tensors_face, emb_model)
+    embeddings = find_embedding(tensors_face.to(device), emb_model)
     names = identify_person(embeddings, classify_model, label2name_df)
     draw_boxes_on_image(pil_image, boxes, names, args.output_path)
     print('Face recognized image saved at {} ...'.format(args.output_path))
