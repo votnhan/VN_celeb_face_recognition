@@ -9,7 +9,7 @@ class MLPModel(nn.Module):
 
     def forward(self, input):
         x = F.relu(self.dense_1(input))
-        x = F.dropout(x, p=0.25, training=self.training)
+        x = F.dropout(x, p=0.5, training=self.training)
         x = self.dense_2(x)
         output = F.log_softmax(x, dim=1)
         return output

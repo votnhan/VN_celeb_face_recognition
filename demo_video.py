@@ -123,4 +123,4 @@ if __name__ == '__main__':
     main(args, mtcnn, emb_model, classify_model, device, label2name_df)
     if args.output_video != '':
         export_video_face_recognition(args.output_frame, args.fps_video, 
-            args.args.output_video)
+            args.output_video)
