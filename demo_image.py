@@ -42,7 +42,7 @@ def identify_person(embeddings, classify_model, name_df):
 
     return list_names
 
-def draw_boxes_on_image(image, boxes, list_names, output_path):
+def draw_boxes_on_image(image, boxes, list_names):
     np_image = np.array(image)
     for box, name in zip(boxes, list_names):
         cv2.rectangle(np_image, (box[0], box[1]), (box[2], box[3]), 
@@ -50,12 +50,10 @@ def draw_boxes_on_image(image, boxes, list_names, output_path):
         cv2.putText(np_image, name, (box[2], box[1]), cv2.FONT_HERSHEY_SIMPLEX, 
         0.75, (0, 255, 0), 2, cv2.LINE_AA)
 
-    rgb_image = cv2.cvtColor(np_image, cv2.COLOR_BGR2RGB)
-    cv2.imwrite(output_path, rgb_image)
-    
+    return np_image
 
 if __name__ == '__main__':
-    args_parser = argparse.ArgumentParser(description='Demostration face \
+    args_parser = argparse.ArgumentParser(description='Face \
                     recognition on a image')
 
     args_parser.add_argument('-fs', '--face_size', default=160, type = int)
@@ -97,8 +95,13 @@ if __name__ == '__main__':
     # Do face recognition process
     pil_image = read_image(args.image_path)
     tensors_face, boxes = detech_faces(pil_image, mtcnn)
-    embeddings = find_embedding(tensors_face.to(device), emb_model)
-    names = identify_person(embeddings, classify_model, label2name_df)
-    draw_boxes_on_image(pil_image, boxes, names, args.output_path)
-    print('Face recognized image saved at {} ...'.format(args.output_path))
+    if tensors_face is not None:
+        embeddings = find_embedding(tensors_face.to(device), emb_model)
+        names = identify_person(embeddings, classify_model, label2name_df)
+        np_image = draw_boxes_on_image(pil_image, boxes, names)
+        rgb_image = cv2.cvtColor(np_image, cv2.COLOR_BGR2RGB)
+        cv2.imwrite(args.output_path, rgb_image)
+        print('Face recognized image saved at {} ...'.format(args.output_path))
+    else:
+        print('Face not found in this image !')
 
