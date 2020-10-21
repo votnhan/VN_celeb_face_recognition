@@ -24,10 +24,10 @@ them:
    -v val.json` to create two JSON files indicating images for training and
    validation respectively.
 
-3. Run `python find_embedding.py -d train -bz 64 -o train_emb` to calculate
+3. Run `python3 find_embedding.py -d train -bz 64 -o train_emb` to calculate
    embedding vectors for all images in training set of dataset.
 
-4. Run `python train.py -c cfg/train_cfg_emb_classify.json` to train MLP model
+4. Run `python3 train.py -c cfg/train_cfg_emb_classify.json` to train MLP model
    classifying embedding with default setting. After training, checkpoints and logs in this process are saved in
    folders `saved/models/run_id` and `saved/logs/run_id` respectively. Note
    that `run_id` is automatically generated when running instructions and it
@@ -44,8 +44,7 @@ prediction label is not found in this file, the prediction name is `Unknown`.
 You can use trained MLP model for recognizing people in an image (follow
 mentioned three steps), namely by running: 
 ```
-python demo_image.py -i input_image.jpg -o input_image_recog.jpg -m
-checkpoint-epoch650.pth -fs 160 -l2n cfg/label2name.txt
+python demo_image.py -i input_image.jpg -o input_image_recog.jpg -m checkpoint-epoch650.pth -fs 160 -l2n cfg/label2name.txt
 ```
 
 ### Face recognition for a video
@@ -56,7 +55,7 @@ appearing people respectively:
 ```
 python demo_video.py -i video_input.mp4 -o output_frames -m checkpoint-epoch650.pth -fs 160 -l2n cfg/label2name.txt -ot tracker.csv
 ```
-Tracker file:
+Tracker file:   
 ![Tracker file](images/tracker_file.png)
 
 If you want to export face recognition version of original video, add `-ov
