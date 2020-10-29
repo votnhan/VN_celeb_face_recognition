@@ -2,6 +2,7 @@ import cv2
 import os
 import argparse
 import glob
+import time
 import pandas as pd
 from pathlib import Path
 from utils import read_image
@@ -52,6 +53,7 @@ def main(args, detect_model, embedding_model, classify_model, device,
     count = 0
     fps = cap.get(cv2.CAP_PROP_FPS)
     tracker = []
+    start_time = time.time()
     while(cap.isOpened()):
         ret, frame = cap.read()
         if not ret:
@@ -64,18 +66,24 @@ def main(args, detect_model, embedding_model, classify_model, device,
                                     embedding_model, classify_model, device,
                                     label2name_df)
 
-        image_name = 'frame_{}.png'.format(count)
-        image_path = os.path.join(args.output_frame, image_name)
-        cv2.imwrite(image_path, recognized_img)
+        if args.save_frame_recognized != '':
+            image_name = 'frame_{}.png'.format(count)
+            image_path = os.path.join(args.output_frame, image_name)
+            cv2.imwrite(image_path, recognized_img)
         
         if names is None:
             names = []
         
         tracker.append((time_in_video, str(names)))
     
+    end_time = time.time()
+    processed_time = end_time - start_time
+    fps_process = int(cv2.CAP_PROP_FRAME_COUNT / processed_time)
     tracked_df = pd.DataFrame(data=tracker, columns=['Time', 'Names'])
     tracked_df.to_csv(args.output_tracker, index=False)
+    cap.release()
     print('Saved tracker file in {} ...'.format(args.output_tracker))
+    print('FPS for recognition face: {}'.format(fps_process))
 
 
 if __name__ == '__main__':
@@ -100,6 +108,8 @@ if __name__ == '__main__':
     args_parser.add_argument('-nc', '--num_classes', default=1000, type=int)
     args_parser.add_argument('-ov', '--output_video', default='', type=str)
     args_parser.add_argument('-fps', '--fps_video', default=25.0, type=float)
+    args_parser.add_argument('-sfr', '--save_frame_recognized', default='', 
+                                    type=str)
 
     args = args_parser.parse_args()
 
