@@ -31,7 +31,8 @@ def main(config):
 
     # Create validation dataloader
     val_dataset = getattr(dataset_md, config['val_dataset']['name'])(**\
-                    config['val_dataset']['args'], transforms=transforms)
+                    config['val_dataset']['args'], 
+                    transforms=transforms_dict['default'] if transforms else None)
 
     val_loader_cfg = config['val_data_loader']['args']
     val_loader = DataLoader(dataset=val_dataset, **val_loader_cfg)

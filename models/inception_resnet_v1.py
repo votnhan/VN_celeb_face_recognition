@@ -262,10 +262,6 @@ class InceptionResnetV1(nn.Module):
             load_weights(self, pretrained)
 
         if self.classify and self.num_classes is not None:
-            # Freeze weight of model
-            for param in self.parameters():
-                param.requires_grad = False
-
             self.logits = nn.Linear(512, self.num_classes)
 
         self.device = torch.device('cpu')

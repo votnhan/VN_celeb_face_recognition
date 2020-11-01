@@ -1,1 +1,2 @@
 from .classification_trainer import ClassificationTrainer
+from .online_aug_trainer import AugClassificationTrainer

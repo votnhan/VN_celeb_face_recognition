@@ -119,6 +119,10 @@ class BaseTrainer():
     def train(self, track4plot=False):
         not_improve_count = 0
         self.model.to(self.device)
+        for state in self.optimizer.state.values():
+            for k, v in state.items():
+                if isinstance(v, torch.Tensor):
+                    state[k] = v.to(self.device)
         if track4plot:
             self.track4plot = str(self.log_dir / 'log_loss.txt')
             headers = ['Epoch', 'Train_loss', 'Validation_loss']
