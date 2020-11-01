@@ -4,7 +4,7 @@ import torch
 import numpy as np
 from torch.utils.data import DataLoader
 from utils import read_json
-from data_loader import transforms as default_tf
+from data_loader import transforms_dict
 import data_loader as dataset_md
 import losses as loss_md
 import models as model_md
@@ -20,10 +20,7 @@ np.random.seed(SEED)
 
 def main(config):
     # Create transforms
-    if config['transforms'] == 'default':
-        transforms = default_tf
-    else:
-        transforms = None
+    transforms = transforms_dict.get(config['transforms'])
 
     # Create train dataloader
     train_dataset = getattr(dataset_md, config['train_dataset']['name'])(**\

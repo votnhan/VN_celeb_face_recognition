@@ -1,0 +1,103 @@
+{
+    "name": "VietNam Celeb Challenge",
+    "data_path": "data",
+    "train_dataset":{
+        "name": "VNCelebDataset",
+        "args": {
+            "data_dir": "train",
+            "label_file": "train.json"
+        }
+    },
+    "train_data_loader":{
+        "name": "VNCeleb training dataloader",
+        "args": {
+            "batch_size": 64,
+            "shuffle": true, 
+            "num_workers": 0
+        }
+    },
+    "val_dataset":{
+        "name": "VNCelebDataset",
+        "args":{
+            "data_dir": "train",
+            "label_file": "val.json"
+        }
+    },
+    "val_data_loader":{
+        "name": "VNCeleb validation dataloader",
+        "args": {
+            "batch_size": 32,
+            "shuffle": false,
+            "num_workers": 0
+        }
+    },
+    "test_data_loader":{
+        "name": "VNCeleb test dataloader",
+        "args": {
+            "root": "test",
+            "csv_file": "test.json",
+            "batch_size": 64,
+            "shuffle": false,
+            "num_workers": 0
+        }
+    },
+    "transforms": "facenet_aug",
+    "metrics": ["accuracy"],
+    "loss": "neg_log_llhood",
+    "model": {
+        "name": "MLPModel",
+        "args": {
+            "input_dim": 512,
+            "num_classes": 1000
+        }
+    },
+    "trainer":{
+        "name": "AugClassificationTrainer",
+        "resume_path": "",
+        "save_dir": "saved",
+        "device": "GPU",
+        "log_step": 30,
+        "do_validation": true,
+        "validation_step": 1,
+        "epochs": 1000,
+        "tracked_metric": ["val_neg_log_llhood", "min"],
+        "patience": 10,
+        "save_period": 25,
+        "save_result": false,
+        "track4plot": true,
+        "encoder": {
+            "name": "InceptionResnetV1",
+            "args": {
+                "pretrained": "vggface2"
+            }
+        }
+    },
+    "optimizer":{
+        "name": "Adam",
+        "args":{
+            "lr": 0.0001,
+            "weight_decay": 1e-04
+        }   
+    },
+    "lr_scheduler":{
+        "name": "ReduceLROnPlateau",
+        "args":{
+            "mode": "min",
+            "threshold": 0.01,
+            "factor": 0.5,
+            "patience": 1,
+            "verbose": true,
+            "min_lr": 1e-05,
+            "threshold_mode": "rel"
+        }
+    },
+    "lr_scheduler_final":{
+        "name": "MultiStepLR",
+        "args": {
+            "milestones": [50, 75],
+            "gamma": 0.1,
+            "verbose": true
+        }
+    }
+
+}
