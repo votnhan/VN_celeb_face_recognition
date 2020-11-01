@@ -45,7 +45,7 @@ def create_folder(path):
     if not os.path.exists(path):
         os.makedirs(path)
 
-def save_pandas_df(data, filename, index, columns, use_index=True):
+def save_pandas_df(data, filename, columns, index=None, use_index=True):
     df = pd.DataFrame(data=data, index=index, columns=columns)
     df.to_csv(filename, index=use_index)
 

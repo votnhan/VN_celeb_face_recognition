@@ -180,14 +180,16 @@ class BaseTrainer():
             log, result = self._validate_epoch(1, save_result)
             # save prediction to csv file
             res_path = str(self.save_dir / 'result.csv')
-            ids, targets, predictions = [], [], []
+            ids, targets, predictions, probs = [], [], [], []
             for batch_pred in result:
-                ids += list(batch_pred[0].cpu().numpy())
+                ids += list(batch_pred[0])
                 targets += list(batch_pred[1].cpu().numpy())
                 predictions += list(batch_pred[2].cpu().numpy())
+                probs += list(batch_pred[3])
 
-            save_pandas_df(zip(targets, predictions), res_path, ids, 
-                            ['Target', 'Prediction'])
+            save_pandas_df(zip(ids, targets, predictions, probs), res_path, 
+                            columns=['Path', 'Target', 'Prediction', 
+                                        'Probability'], use_index=False)
             print('Saved prediction to {}.'.format(res_path))
         
         else:
