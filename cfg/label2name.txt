@@ -9,3 +9,11 @@ label,name
 693,Quang Le
 59,Chi Pu
 707,Son Tung
+594,Noo Phuoc Thinh
+15,Bui Anh Tuan
+850,Toc Tien
+874,Viet Huong
+952,Dong Nhi
+136,Hoai Lam
+250,Karik
+1000,Binz

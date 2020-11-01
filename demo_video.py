@@ -78,7 +78,7 @@ def main(args, detect_model, embedding_model, classify_model, device,
     
     end_time = time.time()
     processed_time = end_time - start_time
-    fps_process = int(cv2.CAP_PROP_FRAME_COUNT / processed_time)
+    fps_process = int(count / processed_time)
     tracked_df = pd.DataFrame(data=tracker, columns=['Time', 'Names'])
     tracked_df.to_csv(args.output_tracker, index=False)
     cap.release()
