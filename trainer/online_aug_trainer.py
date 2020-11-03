@@ -6,10 +6,13 @@ from torch.optim.lr_scheduler import ReduceLROnPlateau
 class AugClassificationTrainer(ClassificationTrainer):
     def __init__(self, config, model, loss, metrics, optimizer, lr_scheduler):
         super().__init__(config, model, loss, metrics, optimizer, lr_scheduler)
-        encoder_info = config['trainer']['encoder']
-        self.encoder = getattr(model_md, encoder_info['name'])(**\
-                            encoder_info['args'], device=self.device)
+        idx_enc = config['trainer']['chosen_idx_enc']
+        encoder_info = config['trainer']['encoders'][idx_enc]
 
+        self.encoder = getattr(model_md, encoder_info['name'])(**\
+                            encoder_info['args'])
+        self.encoder.to(self.device)
+        
         # freeze weights for encoder model !!!
         for param in self.encoder.parameters():
             param.requires_grad = False

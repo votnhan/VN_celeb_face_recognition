@@ -20,7 +20,7 @@ def visualize_false_prediction(result_path, description_dict, img_container,
         image_target = find_class_anchor(description_dict, row[1], img_container)
         image_pred = find_class_anchor(description_dict, row[2], img_container)
         create_image_to_compare(image_input, image_target, image_pred, 
-                                    row[1], row[3], row[0], idx, 
+                                    row[1], row[2], row[3], row[0], idx, 
                                     output_container)
         print('Save visualization for sample at: {}, {}'.format(idx, row[0]))
         
@@ -34,15 +34,18 @@ def find_class_anchor(description_dict, class_idx, container):
 
 
 def create_image_to_compare(image_input, image_target, image_pred, target_cls, 
-                                prob, input_path, idx, output_container):
+                                pred_class, prob, input_path, idx, 
+                                output_container):
     fig, axes = plt.subplots(1, 3)
     image_name = input_path.split('/')[-1]
     axes[0].imshow(image_input)
     axes[1].imshow(image_target)
     axes[2].imshow(image_pred)
-    title = 'Input image is {}; Target class index {}; \
-                Prediction image, probability {:.2f}'.format(image_name, 
-                target_cls, prob)
+    first_img_title = 'Input image: {}; '.format(image_name)
+    second_img_title = 'Target class index: {}; '.format(target_cls)
+    third_img_title = 'Prediction class: {}, probability: {:.2f};'.format\
+                        (pred_class, prob)
+    title = first_img_title + second_img_title + third_img_title
     output_path = os.path.join(output_container, 
                     'vlz_for_sample_{}.png'.format(idx))
     plt.title(title)

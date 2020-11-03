@@ -65,12 +65,24 @@
         "save_period": 25,
         "save_result": false,
         "track4plot": true,
-        "encoder": {
-            "name": "InceptionResnetV1",
-            "args": {
-                "pretrained": "vggface2"
+        "chosen_idx_enc": 0,
+        "encoders": [
+            {
+                "name": "InceptionResnetV1",
+                "args": {
+                    "pretrained": "vggface2"
+                }
+            },
+            {
+                "name": "resnet101",
+                "args": {
+                    "use_se": true,
+                    "pretrained": false,
+                    "img_size": 112,
+                    "cp_path": "insight-face-v3.pth"
+                }
             }
-        }
+        ]
     },
     "optimizer":{
         "name": "Adam",
