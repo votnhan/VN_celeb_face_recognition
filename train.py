@@ -5,6 +5,7 @@ import numpy as np
 from torch.utils.data import DataLoader
 from utils import read_json
 from data_loader import transforms_dict
+from torchvision import transforms as tf
 import data_loader as dataset_md
 import losses as loss_md
 import models as model_md
@@ -20,7 +21,12 @@ np.random.seed(SEED)
 
 def main(config):
     # Create transforms
-    transforms = transforms_dict.get(config['transforms'])
+    tf_config = config['transforms']
+    transforms = transforms_dict.get(tf_config['name'])
+    if tf_config['resize']:
+        transforms.transforms = [tf.Resize(tf_config['encoder_img_size'])] + \
+                                    transforms.transforms
+    
 
     # Create train dataloader
     train_dataset = getattr(dataset_md, config['train_dataset']['name'])(**\

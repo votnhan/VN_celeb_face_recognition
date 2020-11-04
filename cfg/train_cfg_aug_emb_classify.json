@@ -41,7 +41,11 @@
             "num_workers": 0
         }
     },
-    "transforms": "facenet_aug",
+    "transforms": {
+        "name": "facenet_aug",
+        "resize": false,
+        "encoder_img_size": 160
+    },
     "metrics": ["accuracy"],
     "loss": "neg_log_llhood",
     "model": {
@@ -79,7 +83,14 @@
                     "use_se": true,
                     "pretrained": false,
                     "img_size": 112,
-                    "cp_path": "insight-face-v3.pth"
+                    "cp_path": "insight-face-v3.pt"
+                }
+            },
+            {
+                "name": "iresnet100",
+                "args": {
+                    "pretrained": true,
+                    "progress": true
                 }
             }
         ]

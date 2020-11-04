@@ -9,7 +9,6 @@ from PIL import Image
 fixed_size = 160
 sometimes = lambda aug: iaa.Sometimes(0.8, aug)
 rank1_VNceleb_aug_obj = iaa.Sequential([
-  iaa.Resize(fixed_size),
   iaa.Fliplr(0.5),
 	sometimes(
 		iaa.OneOf([
@@ -51,7 +50,6 @@ def rank1_VN_celeb_aug(x):
 
 
 transforms_default = tf.Compose([
-    tf.Resize(fixed_size),
     np.float32,
     tf.Lambda(fix_std),
     tf.Lambda(to_tensor)
@@ -68,6 +66,7 @@ transforms_facenet_aug = tf.Compose([
 
 transforms_rank1_VNceleb_aug = tf.Compose([
   tf.Lambda(rank1_VN_celeb_aug),
+  np.float32,
   tf.Lambda(to_tensor)
 ])
 
