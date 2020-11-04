@@ -226,7 +226,7 @@ class MTCNN(nn.Module):
         if not self.selection_method:
             self.selection_method = 'largest' if self.select_largest else 'probability'
 
-    def forward(self, img, save_path=None, return_prob=False):
+    def forward(self, img, save_path=None, return_prob=False, extract_face=True):
         """Run MTCNN face detection on a PIL image or numpy array. This method performs both
         detection and extraction of faces, returning tensors representing detected faces rather
         than the bounding boxes. To access bounding boxes, see the MTCNN.detect() method below.
@@ -265,7 +265,10 @@ class MTCNN(nn.Module):
                 batch_boxes, batch_probs, batch_points, img, method=self.selection_method
             )
         # Extract faces
-        faces = self.extract(img, batch_boxes, save_path)
+        if extract_face:
+            faces = self.extract(img, batch_boxes, save_path)
+        else:
+            faces = None
 
         if return_prob:
             return faces, batch_boxes, batch_probs

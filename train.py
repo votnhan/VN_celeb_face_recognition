@@ -28,8 +28,9 @@ def main(config):
                                     transforms.transforms
     if transforms:
         val_transform = transforms_dict['default']
-        val_transform.transforms = [tf.Resize(tf_config['encoder_img_size'])] + \
-                                        val_transform.transforms
+        if tf_config['resize']:
+            val_transform.transforms = [tf.Resize(tf_config['encoder_img_size'])] + \
+                                            val_transform.transforms
     else:
         val_transform = None
 
