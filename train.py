@@ -26,7 +26,13 @@ def main(config):
     if tf_config['resize']:
         transforms.transforms = [tf.Resize(tf_config['encoder_img_size'])] + \
                                     transforms.transforms
-    
+    if transforms:
+        val_transform = transforms_dict['default']
+        val_transform.transforms = [tf.Resize(tf_config['encoder_img_size'])] + \
+                                        val_transform.transforms
+    else:
+        val_transform = None
+
 
     # Create train dataloader
     train_dataset = getattr(dataset_md, config['train_dataset']['name'])(**\
@@ -37,8 +43,7 @@ def main(config):
 
     # Create validation dataloader
     val_dataset = getattr(dataset_md, config['val_dataset']['name'])(**\
-                    config['val_dataset']['args'], 
-                    transforms=transforms_dict['default'] if transforms else None)
+                    config['val_dataset']['args'], transforms=val_transform)
 
     val_loader_cfg = config['val_data_loader']['args']
     val_loader = DataLoader(dataset=val_dataset, **val_loader_cfg)
