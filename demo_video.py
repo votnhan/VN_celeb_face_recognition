@@ -6,6 +6,7 @@ import time
 import pandas as pd
 import numpy as np
 import face_alignment
+import torch
 from pathlib import Path
 from utils import read_image
 from models import MTCNN, InceptionResnetV1, MLPModel
@@ -32,57 +33,79 @@ def align_face(face, fa_model, face_size, center_point):
     else:
         points = landmarks[0]
 
-    p1 = np.mean(points[36:42,:], axis=0)
-    p2 = np.mean(points[42:48,:], axis=0)
-    p3 = points[33,:]
-    p4 = points[48,:]
-    p5 = points[54,:]
-    lankmarks_cond = np.mean([p1[1],p2[1]]) < p3[1] \
-                        and p3[1] < np.mean([p4[1],p5[1]]) \
-                        and np.min([p4[1], p5[1]]) > \
-                            np.max([p1[1], p2[1]]) \
-                        and np.min([p1[1], p2[1]]) < p3[1] \
-                        and p3[1] < np.max([p4[1], p5[1]])
+    if points is not None:
+      p1 = np.mean(points[36:42,:], axis=0)
+      p2 = np.mean(points[42:48,:], axis=0)
+      p3 = points[33,:]
+      p4 = points[48,:]
+      p5 = points[54,:]
+      lankmarks_cond = np.mean([p1[1],p2[1]]) < p3[1] \
+                          and p3[1] < np.mean([p4[1],p5[1]]) \
+                          and np.min([p4[1], p5[1]]) > \
+                              np.max([p1[1], p2[1]]) \
+                          and np.min([p1[1], p2[1]]) < p3[1] \
+                          and p3[1] < np.max([p4[1], p5[1]])
 
-    if lankmarks_cond:
-        dst = np.array([p1,p2,p3,p4,p5],dtype=np.float32)
-        cv_img = cv2.cvtColor(face, cv2.COLOR_RGB2BGR)
-        aligned_face = alignment(cv_img, center_point, dst, face_size[0], 
-                                    face_size[1])
-        rgb_aligned_face = cv2.cvtColor(aligned_face, cv2.COLOR_BGR2RGB)
-        return rgb_aligned_face
-    else:
-        return None
+      if lankmarks_cond:
+          dst = np.array([p1,p2,p3,p4,p5],dtype=np.float32)
+          cv_img = cv2.cvtColor(face, cv2.COLOR_RGB2BGR)
+          aligned_face = alignment(cv_img, center_point, dst, face_size[0], 
+                                      face_size[1])
+          rgb_face = cv2.cvtColor(aligned_face, cv2.COLOR_BGR2RGB)
+          return rgb_face
+      else:
+          return None
+    return None
 
 
 def get_face_from_boxes(image, fa_model, boxes, face_size, center_point):
     list_faces = []
-    no_face_idx = []
+    face_idx = []
+    ori_h, ori_w = image.shape[:2]
     for idx, box in enumerate(boxes):
-        face = image[box[1]:box[3], box[0]:box[2]]
-        aligned = align_face(face, fa_model, face_size, center_point)
-        if aligned:
-            list_faces.append(aligned)
-        else:
-            no_face_idx.append(idx)
-    return list_faces, no_face_idx
+        x1 = max(int(box[0]), 0)
+        y1 = max(int(box[1]), 0)
+        x2 = min(int(box[2] + 1), ori_w)
+        y2 = min(int(box[3] + 1), ori_h)
+        w, h = x2 - x1, y2 - y1
+        print('w: {}'.format(w))
+        print('h: {}'.format(h))
+        max_dim = max(w, h)
+        min_dim = min(w, h)
+        if (w*h > 50) and (max_dim/min_dim < 2.0):
+            face = image[y1:y2, x1:x2, :]
+            resized_face = cv2.resize(face, face_size, 
+                                interpolation=cv2.INTER_AREA).copy()
+            aligned = align_face(resized_face, fa_model, face_size, center_point)
+            if aligned is not None:
+                list_faces.append(aligned)
+                face_idx.append(idx)
+
+    return list_faces, face_idx
 
 
 def recognize_faces_image(np_image, detect_model, embedding_model, fa_model,
                             classify_model, device, label2name_df, face_size, 
                             center_point):
-    _, boxes = detect_model(np_image, extract_face=False)
+    rgb_image = cv2.cvtColor(np_image, cv2.COLOR_BGR2RGB)
+    _, boxes = detect_model(rgb_image, extract_face=False)
     if boxes is not None:
-        aligned_faces, no_face_idx = get_face_from_boxes(np_image, fa_model, 
+        aligned_faces, face_idx = get_face_from_boxes(np_image, fa_model, 
                                         boxes, face_size, center_point)
-        aligned_faces_tf = transforms_default(aligned_faces)
-        embeddings = find_embedding(aligned_faces_tf.to(device), embedding_model)
-        names = identify_person(embeddings, classify_model, label2name_df)
-        for idx in no_face_idx:
-            del boxes[idx]
-        rgb_image = draw_boxes_on_image(np_image, boxes, names)
-        bgr_image = cv2.cvtColor(rgb_image, cv2.COLOR_RGB2BGR)
-        return bgr_image, names
+        tf_list = []
+        for face in aligned_faces:
+            tf_face = transforms_default(face)
+            tf_list.append(tf_face)
+        
+        if len(tf_list) > 0:
+          aligned_faces_tf = torch.stack(tf_list, dim=0)
+          embeddings = find_embedding(aligned_faces_tf.to(device), embedding_model)
+          names = identify_person(embeddings, classify_model, label2name_df)
+          chosen_boxes = boxes[face_idx]
+          bgr_image = draw_boxes_on_image(np_image, chosen_boxes, names)
+          return bgr_image, names
+        
+        return np_image, None
     else:
         return np_image, None
 

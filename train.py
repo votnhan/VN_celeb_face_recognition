@@ -74,6 +74,7 @@ def main(config):
     trainer.setup_loader(train_loader, val_loader)
     trainer.train(config['trainer']['track4plot'])
 
+
 if __name__ == '__main__':
     args_parser = argparse.ArgumentParser(description='VNCeleb - Face Recognition')
     args_parser.add_argument('-c', '--config', default=None, type=str, help='Path of config file')
