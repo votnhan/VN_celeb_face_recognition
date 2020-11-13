@@ -7,103 +7,48 @@ import pandas as pd
 import numpy as np
 import face_alignment
 import torch
+import models as model_md 
 from pathlib import Path
-from utils import read_image
-from models import MTCNN, InceptionResnetV1, MLPModel
-from demo_image import detech_faces, find_embedding, identify_person, \
-                        draw_boxes_on_image, load_model_classify
+from utils import read_image, read_json
+from demo_image import find_embedding, identify_person, \
+                        draw_boxes_on_image, load_model_classify, \
+                            get_face_from_boxes, align_face
 from imgaug import augmenters as iaa
 from align_face import alignment, center_point_dict
 from data_loader import transforms_default
 
-
-def align_face(face, fa_model, face_size, center_point):
-    rgb_image = cv2.cvtColor(face, cv2.COLOR_BGR2RGB)
-    landmarks = fa_model.get_landmarks(rgb_image)
-    points = None
-    if landmarks is None:
-        range_check = list(np.linspace(0.0, 3.0, num=11))
-        for sigma in range_check:
-            blur_aug = iaa.GaussianBlur(sigma)
-            image_aug = blur_aug.augment_image(rgb_image)
-            landmarks = fa_model.get_landmarks(image_aug)
-            if landmarks is not None:
-                points = landmarks[0]
-                break
-    else:
-        points = landmarks[0]
-
-    if points is not None:
-      p1 = np.mean(points[36:42,:], axis=0)
-      p2 = np.mean(points[42:48,:], axis=0)
-      p3 = points[33,:]
-      p4 = points[48,:]
-      p5 = points[54,:]
-      lankmarks_cond = np.mean([p1[1],p2[1]]) < p3[1] \
-                          and p3[1] < np.mean([p4[1],p5[1]]) \
-                          and np.min([p4[1], p5[1]]) > \
-                              np.max([p1[1], p2[1]]) \
-                          and np.min([p1[1], p2[1]]) < p3[1] \
-                          and p3[1] < np.max([p4[1], p5[1]])
-
-      if lankmarks_cond:
-          dst = np.array([p1,p2,p3,p4,p5],dtype=np.float32)
-          cv_img = cv2.cvtColor(face, cv2.COLOR_RGB2BGR)
-          aligned_face = alignment(cv_img, center_point, dst, face_size[0], 
-                                      face_size[1])
-          rgb_face = cv2.cvtColor(aligned_face, cv2.COLOR_BGR2RGB)
-          return rgb_face
-      else:
-          return None
-    return None
-
-
-def get_face_from_boxes(image, fa_model, boxes, face_size, center_point):
-    list_faces = []
-    face_idx = []
-    ori_h, ori_w = image.shape[:2]
-    for idx, box in enumerate(boxes):
-        x1 = max(int(box[0]), 0)
-        y1 = max(int(box[1]), 0)
-        x2 = min(int(box[2] + 1), ori_w)
-        y2 = min(int(box[3] + 1), ori_h)
-        w, h = x2 - x1, y2 - y1
-        print('w: {}'.format(w))
-        print('h: {}'.format(h))
-        max_dim = max(w, h)
-        min_dim = min(w, h)
-        if (w*h > 50) and (max_dim/min_dim < 2.0):
-            face = image[y1:y2, x1:x2, :]
-            resized_face = cv2.resize(face, face_size, 
-                                interpolation=cv2.INTER_AREA).copy()
-            aligned = align_face(resized_face, fa_model, face_size, center_point)
-            if aligned is not None:
-                list_faces.append(aligned)
-                face_idx.append(idx)
-
-    return list_faces, face_idx
-
-
 def recognize_faces_image(np_image, detect_model, embedding_model, fa_model,
-                            classify_model, device, label2name_df, face_size, 
+                            classify_model, device, label2name_df, target_fs, 
                             center_point):
     rgb_image = cv2.cvtColor(np_image, cv2.COLOR_BGR2RGB)
     _, boxes = detect_model(rgb_image, extract_face=False)
     if boxes is not None:
-        aligned_faces, face_idx = get_face_from_boxes(np_image, fa_model, 
-                                        boxes, face_size, center_point)
-        tf_list = []
-        for face in aligned_faces:
-            tf_face = transforms_default(face)
-            tf_list.append(tf_face)
+        list_face, face_idx = get_face_from_boxes(np_image, boxes)
+        aligned_face_list = []
+        new_face_idx = []
+        for idx, face in enumerate(list_face):
+            dst = align_face(face, fa_model)
+            if dst is not None:
+                aligned_face = alignment(face, center_point, dst, target_fs[0], 
+                                target_fs[1])
+                rgb_alg_face = cv2.cvtColor(aligned_face, cv2.COLOR_BGR2RGB)
+                aligned_face_list.append(rgb_alg_face)
+                new_face_idx.append(idx)
+
+        remain_idx = [face_idx[x] for x in new_face_idx]
         
-        if len(tf_list) > 0:
-          aligned_faces_tf = torch.stack(tf_list, dim=0)
-          embeddings = find_embedding(aligned_faces_tf.to(device), embedding_model)
-          names = identify_person(embeddings, classify_model, label2name_df)
-          chosen_boxes = boxes[face_idx]
-          bgr_image = draw_boxes_on_image(np_image, chosen_boxes, names)
-          return bgr_image, names
+        if len(remain_idx) > 0:
+            tf_list = []
+            for face in aligned_face_list:
+                tf_face = transforms_default(face)
+                tf_list.append(tf_face)
+
+            aligned_faces_tf = torch.stack(tf_list, dim=0)
+            chosen_boxes = [boxes[x] for x in remain_idx]
+            embeddings = find_embedding(aligned_faces_tf.to(device), emb_model)
+            names = identify_person(embeddings, classify_model, label2name_df)
+            np_image_recog = draw_boxes_on_image(np_image, chosen_boxes, names)
+            return np_image_recog, names
         
         return np_image, None
     else:
@@ -132,7 +77,7 @@ def export_video_face_recognition(output_frame_dir, fps, output_path):
         
 
 def main(args, detect_model, embedding_model, classify_model, fa_model, device, 
-            label2name_df, face_size, center_point):
+            label2name_df, target_fs, center_point):
     
     if not os.path.exists(args.output_frame):
         os.makedirs(args.output_frame)
@@ -152,7 +97,7 @@ def main(args, detect_model, embedding_model, classify_model, fa_model, device,
                     time_in_video))
         recognized_img, names = recognize_faces_image(frame, detect_model, 
                                     embedding_model, fa_model, classify_model, 
-                                    device, label2name_df, face_size, 
+                                    device, label2name_df, target_fs, 
                                     center_point)
 
         if args.save_frame_recognized != '':
@@ -194,11 +139,16 @@ if __name__ == '__main__':
                                 type=str)
     args_parser.add_argument('-dv', '--device', default='GPU', type=str) 
     args_parser.add_argument('-id', '--input_dim_emb', default=512, type=int) 
-    args_parser.add_argument('-nc', '--num_classes', default=1000, type=int)
+    args_parser.add_argument('-nc', '--num_classes', default=1001, type=int)
     args_parser.add_argument('-ov', '--output_video', default='', type=str)
     args_parser.add_argument('-fps', '--fps_video', default=25.0, type=float)
     args_parser.add_argument('-sfr', '--save_frame_recognized', default='', 
                                     type=str)
+    args_parser.add_argument('-enc', '--encoder', default='InceptionResnetV1', 
+                                type=str)
+    args_parser.add_argument('-eargs', '--encoder_args', 
+                                default='cfg/iresnet100_enc.json', type=str)
+    args_parser.add_argument('-tg_fs', '--target_face_size', default=112, type=int)
 
     args = args_parser.parse_args()
 
@@ -208,8 +158,9 @@ if __name__ == '__main__':
 
     # Prepare 3 models, database for label to name
     label2name_df = pd.read_csv(args.label2name)
+    
     # face detection model
-    mtcnn = MTCNN(args.face_size, keep_all=True, device=device, 
+    mtcnn = model_md.MTCNN(args.face_size, keep_all=True, device=device, 
                     min_face_size=args.min_face_size)
     mtcnn.eval()
 
@@ -218,19 +169,20 @@ if __name__ == '__main__':
                 flip_input=False, device=device)
 
     # face embedding model
-    emb_model = InceptionResnetV1(args.pre_trained_emb, device=device)
+    enc_args = read_json(args.encoder_args)
+    emb_model = getattr(model_md, args.encoder)(**enc_args).to(device)
 
     # classify from embedding model
-    classify_model = MLPModel(args.input_dim_emb, args.num_classes)
+    classify_model = model_md.MLPModel(args.input_dim_emb, args.num_classes)
     load_model_classify(args.classify_model, classify_model)
     classify_model = classify_model.to(device)
 
     # center point, face size after alignment
-    face_size = (args.face_size, args.face_size)
-    center_point = center_point_dict[str(face_size)]
+    target_fs = (args.target_face_size, args.target_face_size)
+    center_point = center_point_dict[str(target_fs)]
 
     main(args, mtcnn, emb_model, classify_model, fa_model, device, 
-            label2name_df, face_size, center_point)
+            label2name_df, target_fs, center_point)
 
     if args.output_video != '':
         export_video_face_recognition(args.output_frame, args.fps_video, 
