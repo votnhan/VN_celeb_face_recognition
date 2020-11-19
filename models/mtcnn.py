@@ -328,9 +328,9 @@ class MTCNN(nn.Module):
             box = np.array(box)
             point = np.array(point)
             if len(box) == 0:
-                boxes.append(None)
-                probs.append([None])
-                points.append(None)
+                boxes.append([])
+                probs.append([])
+                points.append([])
             elif self.select_largest:
                 box_order = np.argsort((box[:, 2] - box[:, 0]) * (box[:, 3] - box[:, 1]))[::-1]
                 box = box[box_order]

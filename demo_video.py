@@ -21,8 +21,8 @@ def recognize_faces_image(np_image, detect_model, embedding_model, fa_model,
                             classify_model, device, label2name_df, target_fs, 
                             center_point):
     rgb_image = cv2.cvtColor(np_image, cv2.COLOR_BGR2RGB)
-    _, boxes = detect_model(rgb_image, extract_face=False)
-    if boxes is not None:
+    boxes, _ = detect_model.inference(rgb_image, landmark=False)
+    if len(boxes) > 0:
         list_face, face_idx = get_face_from_boxes(np_image, boxes)
         aligned_face_list = []
         new_face_idx = []
@@ -144,10 +144,13 @@ if __name__ == '__main__':
     args_parser.add_argument('-fps', '--fps_video', default=25.0, type=float)
     args_parser.add_argument('-sfr', '--save_frame_recognized', default='', 
                                     type=str)
+    args_parser.add_argument('-det', '--detection', default='MTCNN', type=str)
     args_parser.add_argument('-enc', '--encoder', default='InceptionResnetV1', 
                                 type=str)
     args_parser.add_argument('-eargs', '--encoder_args', 
-                                default='cfg/iresnet100_enc.json', type=str)
+                                default='cfg/embedding/iresnet100_enc.json', type=str)
+    args_parser.add_argument('-dargs', '--detection_args', 
+                                default='cfg/detection/mtcnn.json', type=str)
     args_parser.add_argument('-tg_fs', '--target_face_size', default=112, type=int)
 
     args = args_parser.parse_args()
@@ -160,9 +163,9 @@ if __name__ == '__main__':
     label2name_df = pd.read_csv(args.label2name)
     
     # face detection model
-    mtcnn = model_md.MTCNN(args.face_size, keep_all=True, device=device, 
-                    min_face_size=args.min_face_size)
-    mtcnn.eval()
+    det_args = read_json(args.detection_args)
+    detection_md = getattr(model_md, args.detection)(**det_args)
+    detection_md.eval()
 
     # face alignment model
     fa_model = face_alignment.FaceAlignment(face_alignment.LandmarksType._2D, 
@@ -181,7 +184,7 @@ if __name__ == '__main__':
     target_fs = (args.target_face_size, args.target_face_size)
     center_point = center_point_dict[str(target_fs)]
 
-    main(args, mtcnn, emb_model, classify_model, fa_model, device, 
+    main(args, detection_md, emb_model, classify_model, fa_model, device, 
             label2name_df, target_fs, center_point)
 
     if args.output_video != '':

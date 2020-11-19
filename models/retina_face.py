@@ -53,7 +53,8 @@ class LandmarkHead(nn.Module):
 
 class RetinaFace(nn.Module):
     def __init__(self, backbone_cfg, phase='train', backbone_path=None, device='cuda:0', 
-                    conf_thres=0.02, topk_bf_nms=5000, keep_top_k=750, nms_thres=0.4, vis_thres=0.6):
+                    conf_thres=0.02, topk_bf_nms=5000, keep_top_k=750, nms_thres=0.4, vis_thres=0.6, 
+                    checkpoint_path = None):
         
         """
         :param cfg:  Network related settings.
@@ -66,7 +67,7 @@ class RetinaFace(nn.Module):
         self.device = device
         self.conf_thres = conf_thres
         self.topk_bf_nms = topk_bf_nms
-        self.keep_top_k = self.keep_top_k
+        self.keep_top_k = keep_top_k
         self.nms_thres = nms_thres
         self.vis_thres = vis_thres
 
@@ -106,6 +107,8 @@ class RetinaFace(nn.Module):
 
         # meta data for model 
         self.channels_subtract = (104, 117, 123)
+        if checkpoint_path is not None:
+            self.load_model(checkpoint_path)
 
 
     def _make_class_head(self,fpn_num=3,inchannels=64,anchor_num=2):
@@ -155,6 +158,7 @@ class RetinaFace(nn.Module):
         arr_image = np.float32(rgb_image)
         img_height, img_width, _ = arr_image.shape
         scale = torch.Tensor([img_width, img_height, img_width, img_height])
+        arr_image -= self.channels_subtract
         arr_image = arr_image.transpose(2, 0, 1)
         tensor_image = torch.from_numpy(arr_image).unsqueeze(0)
         tensor_image = tensor_image.to(self.device)
@@ -173,6 +177,8 @@ class RetinaFace(nn.Module):
         tensor_scale1 = torch.Tensor([img_width, img_height, img_width, img_height,
                                img_width, img_height, img_width, img_height,
                                img_width, img_height])
+
+        tensor_scale1 = tensor_scale1.to(self.device)
 
         landms = landms * tensor_scale1
         landms = landms.cpu().numpy()
@@ -207,3 +213,36 @@ class RetinaFace(nn.Module):
             return dets[:, :4], dets[:, 4], landms
 
         return dets[:, :4], dets[:, 4]
+
+    
+    def load_model(self, pretrained_path):
+        print('Loading pretrained model from {}'.format(pretrained_path))
+        pretrained_dict = torch.load(pretrained_path, map_location='cpu')
+
+        if "state_dict" in pretrained_dict.keys():
+            pretrained_dict = remove_prefix(pretrained_dict['state_dict'], 'module.')
+        else:
+            pretrained_dict = remove_prefix(pretrained_dict, 'module.')
+        
+        self.check_keys(pretrained_dict)
+        self.load_state_dict(pretrained_dict, strict=False)
+
+
+    def check_keys(self, pretrained_state_dict):
+        ckpt_keys = set(pretrained_state_dict.keys())
+        model_keys = set(self.state_dict().keys())
+        used_pretrained_keys = model_keys & ckpt_keys
+        unused_pretrained_keys = ckpt_keys - model_keys
+        missing_keys = model_keys - ckpt_keys
+        print('Missing keys:{}'.format(len(missing_keys)))
+        print('Unused checkpoint keys:{}'.format(len(unused_pretrained_keys)))
+        print('Used keys:{}'.format(len(used_pretrained_keys)))
+        assert len(used_pretrained_keys) > 0, 'load NONE from pretrained checkpoint'
+        return True
+
+
+def remove_prefix(state_dict, prefix):
+    ''' Old style model is stored with all names of parameters sharing common prefix 'module.' '''
+    print('remove prefix \'{}\''.format(prefix))
+    f = lambda x: x.split(prefix, 1)[-1] if x.startswith(prefix) else x
+    return {f(key): value for key, value in state_dict.items()}

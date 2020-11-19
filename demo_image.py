@@ -171,7 +171,7 @@ if __name__ == '__main__':
     # Do face recognition process
     np_image = cv2.imread(args.image_path)
     rgb_image = cv2.cvtColor(np_image, cv2.COLOR_BGR2RGB)
-    boxes, _,  = detection_md(rgb_image, landmark=False)
+    boxes, _,  = detection_md.inference(rgb_image, landmark=False)
     
     if len(boxes) > 0:
         list_face, face_idx = get_face_from_boxes(np_image, boxes)
