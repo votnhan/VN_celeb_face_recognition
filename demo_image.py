@@ -131,8 +131,11 @@ if __name__ == '__main__':
     args_parser.add_argument('-nc', '--num_classes', default=1001, type=int)
     args_parser.add_argument('-enc', '--encoder', default='InceptionResnetV1', 
                                 type=str)
+    args_parser.add_argument('-det', '--detection', default='MTCNN', type=str)
     args_parser.add_argument('-eargs', '--encoder_args', 
-                                default='cfg/iresnet100_enc.json', type=str)
+                                default='cfg/embedding/iresnet100_enc.json', type=str)
+    args_parser.add_argument('-dargs', '--detection_args', 
+                                default='cfg/detection/mtcnn.json', type=str)
     args_parser.add_argument('-tg_fs', '--target_face_size', default=112, type=int)
 
 
@@ -145,10 +148,10 @@ if __name__ == '__main__':
     # Prepare 3 models, database for label to name
     label2name_df = pd.read_csv(args.label2name)
     # face detection model
-    mtcnn = model_md.MTCNN(args.face_size, keep_all=True, device=device, 
-                    min_face_size=args.min_face_size)
-    
-    mtcnn.eval()
+    det_args = read_json(args.detection_args)
+    detection_md = getattr(model_md, args.detection)(**det_args)
+    detection_md.eval()
+   
     # face alignment model
     fa_model = face_alignment.FaceAlignment(face_alignment.LandmarksType._2D, 
                 flip_input=False, device=device)
@@ -168,8 +171,9 @@ if __name__ == '__main__':
     # Do face recognition process
     np_image = cv2.imread(args.image_path)
     rgb_image = cv2.cvtColor(np_image, cv2.COLOR_BGR2RGB)
-    _, boxes = mtcnn(rgb_image, extract_face=False)
-    if boxes is not None:
+    boxes, _,  = detection_md(rgb_image, landmark=False)
+    
+    if len(boxes) > 0:
         list_face, face_idx = get_face_from_boxes(np_image, boxes)
         aligned_face_list = []
         new_face_idx = []

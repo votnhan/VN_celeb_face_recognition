@@ -3,7 +3,7 @@ from torch import nn
 import numpy as np
 import os
 
-from .utils import detect_face, extract_face
+from .mtcnn_utils import detect_face, extract_face
 
 
 class PNet(nn.Module):
@@ -507,6 +507,10 @@ class MTCNN(nn.Module):
             faces = faces[0]
 
         return faces
+
+    def inference(self, rgb_image, landmark=True):
+        output = self.detect(rgb_image, landmark)
+        return output
 
 
 def fixed_image_standardization(image_tensor):

@@ -1,0 +1,6 @@
+{
+    "image_size": 160,
+    "keep_all": true,
+    "device":  "cuda:0",
+    "min_face_size": 50
+}

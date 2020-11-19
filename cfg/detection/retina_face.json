@@ -1,0 +1,11 @@
+{
+    "backbone_cfg": "cfg_mnet",
+    "phase": "test",
+    "backbone_path": "mobilenet0.25_Final.pth",
+    "device": "cuda:0",
+    "conf_thres": 0.02,
+    "topk_bf_nms": 5000,
+    "keep_top_k": 750,
+    "nms_thres": 0.4, 
+    "vis_thres": 0.6
+}
