@@ -68,7 +68,7 @@ def get_face_from_boxes(image, boxes):
         w, h = x2 - x1, y2 - y1
         max_dim = max(w, h)
         min_dim = min(w, h)
-        if min_dim > 30 and (max_dim/min_dim < 2.0):
+        if min_dim > 50 and (max_dim/min_dim < 2.0):
             face = image[y1:y2, x1:x2, :]
             list_faces.append(face)
             face_idx.append(idx)

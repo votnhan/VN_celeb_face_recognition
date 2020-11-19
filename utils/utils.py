@@ -35,7 +35,7 @@ def read_json(filename):
 
 def write_json(filename, content_dict, log=True):
     with open(filename, 'w') as fp:
-        json.dump(content_dict, fp)
+        json.dump(content_dict, fp, indent=True)
 
     if log:
         print('Write json file {}'.format(filename))
