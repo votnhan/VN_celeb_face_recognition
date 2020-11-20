@@ -210,7 +210,7 @@ class RetinaFace(nn.Module):
         landms = landms[chosen_boxes_idx, :]
 
         if landmark:
-            return dets[:, :4], dets[:, 4], landms
+            return dets[:, :4], dets[:, 4], landms.reshape(-1, 5, 2)
 
         return dets[:, :4], dets[:, 4]
 

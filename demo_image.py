@@ -109,7 +109,84 @@ def align_face(face, fa_model):
             return dst
     
     return None
+
+def move_landmark_to_box(box, landmark):
+    top_left = box[:2]
+    moved_landmark = landmark - top_left
+    return moved_landmark
     
+
+def sequential_detection_and_alignment(rgb_image, detection_md, fa_model, emb_model, classify_model, 
+                                        center_point, target_fs):
+    boxes, _,  = detection_md.inference(rgb_image, landmark=False)
+    np_image = cv2.cvtColor(rgb_image, cv2.COLOR_RGB2BGR)
+    if len(boxes) > 0:
+        list_face, face_idx = get_face_from_boxes(np_image, boxes)
+        aligned_face_list = []
+        new_face_idx = []
+        for idx, face in enumerate(list_face):
+            dst = align_face(face, fa_model)
+            if dst is not None:
+                aligned_face = alignment(face, center_point, dst, target_fs[0], 
+                                target_fs[1])
+                rgb_alg_face = cv2.cvtColor(aligned_face, cv2.COLOR_BGR2RGB)
+                aligned_face_list.append(rgb_alg_face)
+                new_face_idx.append(idx)
+
+        remain_idx = [face_idx[x] for x in new_face_idx]
+        
+        if len(remain_idx) > 0:
+            tf_list = []
+            for face in aligned_face_list:
+                tf_face = transforms_default(face)
+                tf_list.append(tf_face)
+
+            aligned_faces_tf = torch.stack(tf_list, dim=0)
+            chosen_boxes = [boxes[x] for x in remain_idx]
+            embeddings = find_embedding(aligned_faces_tf.to(device), emb_model)
+            names = identify_person(embeddings, classify_model, label2name_df)
+            np_image_recog = draw_boxes_on_image(np_image, chosen_boxes, names)
+            cv2.imwrite(args.output_path, np_image_recog)
+            print('Face recognized image saved at {} ...'.format(args.output_path))
+        else:
+            print('Bounding boxes were not qualified or could not detect landmarks !')
+    else:
+        print('Face not found in this image !')
+    
+
+def parallel_detection_and_alignment(rgb_image, detection_md, emb_model, classify_model, center_point, 
+                                        target_fs):
+    boxes, _, landmarks, = detection_md.inference(rgb_image, landmark=True)
+    np_image = cv2.cvtColor(rgb_image, cv2.COLOR_RGB2BGR)
+    if len(boxes) > 0:
+        list_face, face_idx = get_face_from_boxes(np_image, boxes)
+        if len(face_idx) > 0:
+            aligned_face_list = []
+            chosen_boxes = [boxes[x] for x in face_idx]
+            chosen_landmarks = [landmarks[x] for x in face_idx]
+            
+            for idx, face in enumerate(list_face):
+                moved_landmark = move_landmark_to_box(chosen_boxes[idx], chosen_landmarks[idx])
+                aligned_face = alignment(face, center_point, moved_landmark, target_fs[0], target_fs[1])
+                rgb_alg_face = cv2.cvtColor(aligned_face, cv2.COLOR_BGR2RGB)
+                aligned_face_list.append(rgb_alg_face)
+
+            tf_list = []
+            for face in aligned_face_list:
+                tf_face = transforms_default(face)
+                tf_list.append(tf_face)
+            
+            aligned_faces_tf = torch.stack(tf_list, dim=0)
+            
+            embeddings = find_embedding(aligned_faces_tf.to(device), emb_model)
+            names = identify_person(embeddings, classify_model, label2name_df)
+            np_image_recog = draw_boxes_on_image(np_image, chosen_boxes, names)
+            cv2.imwrite(args.output_path, np_image_recog)
+            print('Face recognized image saved at {} ...'.format(args.output_path))
+        else:
+            print('Bounding boxes were not qualified or could not detect landmarks !')
+    else:
+        print('Face not found in this image !')
 
 if __name__ == '__main__':
     args_parser = argparse.ArgumentParser(description='Face \
@@ -137,6 +214,7 @@ if __name__ == '__main__':
     args_parser.add_argument('-dargs', '--detection_args', 
                                 default='cfg/detection/mtcnn.json', type=str)
     args_parser.add_argument('-tg_fs', '--target_face_size', default=112, type=int)
+    args_parser.add_argument('--inference_method', default='seq_fd_vs_aln', type=str)
 
 
     args = args_parser.parse_args()
@@ -171,38 +249,12 @@ if __name__ == '__main__':
     # Do face recognition process
     np_image = cv2.imread(args.image_path)
     rgb_image = cv2.cvtColor(np_image, cv2.COLOR_BGR2RGB)
-    boxes, _,  = detection_md.inference(rgb_image, landmark=False)
-    
-    if len(boxes) > 0:
-        list_face, face_idx = get_face_from_boxes(np_image, boxes)
-        aligned_face_list = []
-        new_face_idx = []
-        for idx, face in enumerate(list_face):
-            dst = align_face(face, fa_model)
-            if dst is not None:
-                aligned_face = alignment(face, center_point, dst, target_fs[0], 
-                                target_fs[1])
-                rgb_alg_face = cv2.cvtColor(aligned_face, cv2.COLOR_BGR2RGB)
-                aligned_face_list.append(rgb_alg_face)
-                new_face_idx.append(idx)
 
-        remain_idx = [face_idx[x] for x in new_face_idx]
-        
-        if len(remain_idx) > 0:
-            tf_list = []
-            for face in aligned_face_list:
-                tf_face = transforms_default(face)
-                tf_list.append(tf_face)
-
-            aligned_faces_tf = torch.stack(tf_list, dim=0)
-            chosen_boxes = [boxes[x] for x in remain_idx]
-            embeddings = find_embedding(aligned_faces_tf.to(device), emb_model)
-            names = identify_person(embeddings, classify_model, label2name_df)
-            np_image_recog = draw_boxes_on_image(np_image, chosen_boxes, names)
-            cv2.imwrite(args.output_path, np_image_recog)
-            print('Face recognized image saved at {} ...'.format(args.output_path))
-        else:
-            print('Bounding boxes were not qualified or could not detect landmarks !')
+    if args.inference_method == 'seq_fd_vs_aln':
+        sequential_detection_and_alignment(rgb_image, detection_md, fa_model, emb_model, classify_model, 
+                                            center_point, target_fs)
+    elif args.inference_method == 'par_fd_vs_aln':
+        parallel_detection_and_alignment(rgb_image, detection_md, emb_model, classify_model, 
+                                            center_point, target_fs)
     else:
-        print('Face not found in this image !')
-
+        print('Do not support {} method.'.format(args.args.inference_method))
