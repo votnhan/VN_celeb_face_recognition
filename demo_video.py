@@ -12,14 +12,14 @@ from pathlib import Path
 from utils import read_image, read_json
 from demo_image import find_embedding, identify_person, \
                         draw_boxes_on_image, load_model_classify, \
-                            get_face_from_boxes, align_face
+                            get_face_from_boxes, align_face, move_landmark_to_box
 from imgaug import augmenters as iaa
 from align_face import alignment, center_point_dict
 from data_loader import transforms_default
 
-def recognize_faces_image(np_image, detect_model, embedding_model, fa_model,
+def seq_detection_and_alignment(np_image, detect_model, embedding_model, fa_model,
                             classify_model, device, label2name_df, target_fs, 
-                            center_point):
+                            center_point, box_requirements):
     rgb_image = cv2.cvtColor(np_image, cv2.COLOR_BGR2RGB)
     boxes, _ = detect_model.inference(rgb_image, landmark=False)
     if len(boxes) > 0:
@@ -54,6 +54,40 @@ def recognize_faces_image(np_image, detect_model, embedding_model, fa_model,
     else:
         return np_image, None
 
+def parallel_detection_and_alignment(np_image, detect_model, embedding_model, fa_model,
+                            classify_model, device, label2name_df, target_fs, 
+                            center_point):
+    rgb_image = cv2.cvtColor(np_image, cv2.COLOR_BGR2RGB)
+    boxes, _, landmarks = detect_model.inference(rgb_image, landmark=True)
+    if len(boxes) > 0:
+        list_face, face_idx = get_face_from_boxes(np_image, boxes)
+        if len(face_idx) > 0:
+            aligned_face_list = []
+            chosen_boxes = [boxes[x] for x in face_idx]
+            chosen_landmarks = [landmarks[x] for x in face_idx]
+
+            for idx, face in enumerate(list_face):
+                moved_landmark = move_landmark_to_box(chosen_boxes[idx], chosen_landmarks[idx])
+                aligned_face = alignment(face, center_point, moved_landmark, target_fs[0], target_fs[1])
+                rgb_alg_face = cv2.cvtColor(aligned_face, cv2.COLOR_BGR2RGB)
+                aligned_face_list.append(rgb_alg_face)
+
+            tf_list = []
+            for face in aligned_face_list:
+                tf_face = transforms_default(face)
+                tf_list.append(tf_face)
+
+            aligned_faces_tf = torch.stack(tf_list, dim=0)
+            embeddings = find_embedding(aligned_faces_tf.to(device), emb_model)
+            names = identify_person(embeddings, classify_model, label2name_df)
+            np_image_recog = draw_boxes_on_image(np_image, chosen_boxes, names)
+            return np_image_recog, names
+        
+        else:
+            return np_image, None
+    else:
+        return np_image, None
+
 
 def export_video_face_recognition(output_frame_dir, fps, output_path):
     container_path = Path(output_frame_dir)
@@ -82,6 +116,13 @@ def main(args, detect_model, embedding_model, classify_model, fa_model, device,
     if not os.path.exists(args.output_frame):
         os.makedirs(args.output_frame)
 
+    print('Method: {}'.format(args.inference_method))
+    if args.inference_method == 'seq_fd_vs_aln':
+        box_requirements = {
+            'min_dim': args.min_dim_box,
+            'box_ratio': args.box_ratio
+        }
+    
     cap = cv2.VideoCapture(args.video_path)
     count = 0
     fps = cap.get(cv2.CAP_PROP_FPS)
@@ -95,10 +136,19 @@ def main(args, detect_model, embedding_model, classify_model, fa_model, device,
         time_in_video = count / fps
         print('Processing for frame: {}, time: {:.2f} s'.format(count, 
                     time_in_video))
-        recognized_img, names = recognize_faces_image(frame, detect_model, 
+        if args.inference_method == 'seq_fd_vs_aln':
+            recognized_img, names = seq_detection_and_alignment(frame, detect_model, 
+                                    embedding_model, fa_model, classify_model, 
+                                    device, label2name_df, target_fs, 
+                                    center_point, box_requirements)
+        elif args.inference_method == 'par_fd_vs_aln':
+            recognized_img, names = parallel_detection_and_alignment(frame, detect_model, 
                                     embedding_model, fa_model, classify_model, 
                                     device, label2name_df, target_fs, 
                                     center_point)
+        else:
+            print('Do not support {} method.'.format(args.args.inference_method))
+            break
 
         if args.save_frame_recognized != '':
             image_name = 'frame_{}.png'.format(count)
@@ -152,6 +202,9 @@ if __name__ == '__main__':
     args_parser.add_argument('-dargs', '--detection_args', 
                                 default='cfg/detection/mtcnn.json', type=str)
     args_parser.add_argument('-tg_fs', '--target_face_size', default=112, type=int)
+    args_parser.add_argument('--inference_method', default='seq_fd_vs_aln', type=str)
+    args_parser.add_argument('--min_dim_box', default=50, type=int)
+    args_parser.add_argument('--box_ratio', default=2.0, type=float)
 
     args = args_parser.parse_args()
 

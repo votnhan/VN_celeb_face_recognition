@@ -56,7 +56,7 @@ def draw_boxes_on_image(image, boxes, list_names):
 
     return np_image
 
-def get_face_from_boxes(image, boxes):
+def get_face_from_boxes(image, boxes, box_requirements=None):
     list_faces = []
     face_idx = []
     ori_h, ori_w = image.shape[:2]
@@ -68,7 +68,14 @@ def get_face_from_boxes(image, boxes):
         w, h = x2 - x1, y2 - y1
         max_dim = max(w, h)
         min_dim = min(w, h)
-        if min_dim > 50 and (max_dim/min_dim < 2.0):
+        
+        chosen = False
+        if box_requirements is None:
+            chosen = True
+        else:
+            if min_dim > box_requirements['min_dim'] and (max_dim/min_dim < box_requirements['box_ratio']):
+                chosen = True
+        if chosen:
             face = image[y1:y2, x1:x2, :]
             list_faces.append(face)
             face_idx.append(idx)
@@ -117,11 +124,11 @@ def move_landmark_to_box(box, landmark):
     
 
 def sequential_detection_and_alignment(rgb_image, detection_md, fa_model, emb_model, classify_model, 
-                                        center_point, target_fs):
+                                        center_point, target_fs, box_requirements):
     boxes, _,  = detection_md.inference(rgb_image, landmark=False)
     np_image = cv2.cvtColor(rgb_image, cv2.COLOR_RGB2BGR)
     if len(boxes) > 0:
-        list_face, face_idx = get_face_from_boxes(np_image, boxes)
+        list_face, face_idx = get_face_from_boxes(np_image, boxes, box_requirements)
         aligned_face_list = []
         new_face_idx = []
         for idx, face in enumerate(list_face):
@@ -215,8 +222,9 @@ if __name__ == '__main__':
                                 default='cfg/detection/mtcnn.json', type=str)
     args_parser.add_argument('-tg_fs', '--target_face_size', default=112, type=int)
     args_parser.add_argument('--inference_method', default='seq_fd_vs_aln', type=str)
-
-
+    args_parser.add_argument('--min_dim_box', default=50, type=int)
+    args_parser.add_argument('--box_ratio', default=2.0, type=float)
+    
     args = args_parser.parse_args()
 
     device = 'cpu'
@@ -251,8 +259,12 @@ if __name__ == '__main__':
     rgb_image = cv2.cvtColor(np_image, cv2.COLOR_BGR2RGB)
 
     if args.inference_method == 'seq_fd_vs_aln':
+        box_requirements = {
+            'min_dim': args.min_dim_box,
+            'box_ratio': args.box_ratio
+        }
         sequential_detection_and_alignment(rgb_image, detection_md, fa_model, emb_model, classify_model, 
-                                            center_point, target_fs)
+                                            center_point, target_fs, box_requirements)
     elif args.inference_method == 'par_fd_vs_aln':
         parallel_detection_and_alignment(rgb_image, detection_md, emb_model, classify_model, 
                                             center_point, target_fs)
