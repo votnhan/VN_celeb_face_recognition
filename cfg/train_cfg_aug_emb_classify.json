@@ -52,7 +52,7 @@
         "name": "MLPModel",
         "args": {
             "input_dim": 512,
-            "num_classes": 1000
+            "num_classes": 1001
         }
     },
     "trainer":{
@@ -69,7 +69,7 @@
         "save_period": 10,
         "save_result": false,
         "track4plot": true,
-        "chosen_idx_enc": 0,
+        "chosen_idx_enc": 2,
         "encoders": [
             {
                 "name": "InceptionResnetV1",
