@@ -31,13 +31,23 @@ def find_embedding(image_tensor, embedding_model):
     embeddings = embedding_model(image_tensor)
     return embeddings.detach()
 
-def identify_person(embeddings, classify_model, name_df):
+def identify_person(embeddings, classify_model, name_df, threshold=0.0):
     classify_model.eval()
     output = classify_model(embeddings)
     preditions = torch.argmax(output, dim=1)
     preditions_np = preditions.detach().cpu().numpy()
+    probs = torch.exp(output).detach().cpu().numpy()
+
+    chosen_prob = [probs[idx][chosen_idx] for idx, chosen_idx in enumerate(preditions_np)]
+    filtered_preditions = []
+    for idx, prob in enumerate(chosen_prob):
+        if prob >= threshold:
+            filtered_preditions.append(preditions_np[idx])
+        else:
+            filtered_preditions.append(preditions_np.shape[0]-1)
+            
     list_names = []
-    for pred in preditions_np:
+    for pred in filtered_preditions:
         name = list(name_df['name'][name_df['label'] == pred])
         if len(name) > 0:
             list_names.append(name[0])

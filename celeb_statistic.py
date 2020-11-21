@@ -16,64 +16,15 @@ from utils import read_image, read_json, write_json
 from demo_image import find_embedding, identify_person, \
                         draw_boxes_on_image, load_model_classify, \
                             get_face_from_boxes, align_face
+from demo_video import seq_detection_and_alignment, parallel_detection_and_alignment
 from imgaug import augmenters as iaa
 from align_face import alignment, center_point_dict
 from data_loader import transforms_default
-
-def ignore_name_unknown(names_list, bboxes_list, unknown_name):
-    chosen_list = []
-    for idx, name in enumerate(names_list):
-        if name != unknown_name:
-            chosen_list.append(idx)
-    
-    chosen_names = [names_list[x] for x in chosen_list]
-    chosen_bboxes = [bboxes_list[x] for x in chosen_list]
-    return chosen_bboxes, chosen_names
+from utils import convert_sec_to_max_time_quantity
 
 
-def recognize_faces_image(np_image, detect_model, embedding_model, fa_model,
-                            classify_model, device, label2name_df, target_fs, 
-                            center_point, ignored_name='Unknown'):
-    rgb_image = cv2.cvtColor(np_image, cv2.COLOR_BGR2RGB)
-    _, boxes = detect_model(rgb_image, extract_face=False)
-    if boxes is not None:
-        list_face, face_idx = get_face_from_boxes(np_image, boxes)
-        aligned_face_list = []
-        new_face_idx = []
-        for idx, face in enumerate(list_face):
-            dst = align_face(face, fa_model)
-            if dst is not None:
-                aligned_face = alignment(face, center_point, dst, target_fs[0], 
-                                target_fs[1])
-                rgb_alg_face = cv2.cvtColor(aligned_face, cv2.COLOR_BGR2RGB)
-                aligned_face_list.append(rgb_alg_face)
-                new_face_idx.append(idx)
-
-        remain_idx = [face_idx[x] for x in new_face_idx]
-        
-        if len(remain_idx) > 0:
-            tf_list = []
-            for face in aligned_face_list:
-                tf_face = transforms_default(face)
-                tf_list.append(tf_face)
-
-            aligned_faces_tf = torch.stack(tf_list, dim=0)
-            chosen_boxes = [boxes[x] for x in remain_idx]
-            embeddings = find_embedding(aligned_faces_tf.to(device), emb_model)
-            names = identify_person(embeddings, classify_model, label2name_df)
-            after_ignored_bboxes, after_ignore_names = ignore_name_unknown(names, 
-                                                        chosen_boxes, ignored_name)
-            np_image_recog = draw_boxes_on_image(np_image, after_ignored_bboxes, 
-                                after_ignore_names)
-            
-            return np_image_recog, after_ignore_names
-        
-        return np_image, None
-    else:
-        return np_image, None
-
-
-def export_json_stat(tracker_df, output_js_path, n_video_intervals, n_appear=8):
+def export_json_stat(tracker_df, output_js_path, n_video_intervals, n_appear=4, 
+                        unknown_name='Unknown'):
     interval_counter = 0
     dict_track = {}
     n_rows = len(tracker_df['Time'])
@@ -94,11 +45,13 @@ def export_json_stat(tracker_df, output_js_path, n_video_intervals, n_appear=8):
         
         unique_names_for_itv = []
         for k, v in Counter(names_for_itv).items():
-            if v >= n_appear:
+            if (k != unknown_name) and (v >= n_appear):
                 unique_names_for_itv.append(k)
 
+        start_itv = convert_sec_to_max_time_quantity(df_for_itv['Time'].iloc[0])
+        end_itv = convert_sec_to_max_time_quantity(df_for_itv['Time'].iloc[-1])
         dict_track[str(interval_counter)] = {
-            "interval": (df_for_itv['Time'].iloc[0], df_for_itv['Time'].iloc[-1]),
+            "interval": (start_itv, end_itv),
             "celebrities": unique_names_for_itv
         }
     
@@ -111,8 +64,15 @@ def main(args, detect_model, embedding_model, classify_model, fa_model, device,
     if not os.path.exists(args.output_frame):
         os.makedirs(args.output_frame)
 
+    if args.inference_method == 'seq_fd_vs_aln':
+        box_requirements = {
+            'min_dim': args.min_dim_box,
+            'box_ratio': args.box_ratio
+        }
+    
     cap = cv2.VideoCapture(args.video_path)
     count = 0
+    processed_frame = 0
     fps = cap.get(cv2.CAP_PROP_FPS)
     tracker = []
     start_time = time.time()
@@ -127,17 +87,29 @@ def main(args, detect_model, embedding_model, classify_model, fa_model, device,
             if count % fps == idx:
                 if_process = True
                 break
-        
+
         if not if_process:
             continue
         
+        processed_frame += 1
         time_in_video = count / fps
-        print('Processing for frame: {}, time: {:.2f} s'.format(count, 
-                    time_in_video))
-        recognized_img, names = recognize_faces_image(frame, detect_model, 
+        if (processed_frame % args.log_step) == 0:
+            print('Processing for frame: {}, time: {:.2f} s'.format(count, 
+                        time_in_video))
+    
+        if args.inference_method == 'seq_fd_vs_aln':
+            recognized_img, names = seq_detection_and_alignment(frame, detect_model, 
                                     embedding_model, fa_model, classify_model, 
                                     device, label2name_df, target_fs, 
-                                    center_point, args.ignored_name)
+                                    center_point, box_requirements, args.recog_threshold)
+        elif args.inference_method == 'par_fd_vs_aln':
+            recognized_img, names = parallel_detection_and_alignment(frame, detect_model, 
+                                    embedding_model, fa_model, classify_model, 
+                                    device, label2name_df, target_fs, 
+                                    center_point, args.recog_threshold)
+        else:
+            print('Do not support {} method.'.format(args.args.inference_method))
+            break
 
         if args.save_frame_recognized:
             image_name = 'frame_{}.png'.format(count)
@@ -180,10 +152,13 @@ if __name__ == '__main__':
     args_parser.add_argument('-nc', '--num_classes', default=1001, type=int)
     args_parser.add_argument('-sfr', '--save_frame_recognized', 
                                 action='store_true')
+    args_parser.add_argument('-det', '--detection', default='MTCNN', type=str)
     args_parser.add_argument('-enc', '--encoder', default='InceptionResnetV1', 
                                 type=str)
     args_parser.add_argument('-eargs', '--encoder_args', 
-                                default='cfg/iresnet100_enc.json', type=str)
+                                default='cfg/embedding/iresnet100_enc.json', type=str)
+    args_parser.add_argument('-dargs', '--detection_args', 
+                                default='cfg/detection/mtcnn.json', type=str)
     args_parser.add_argument('-tg_fs', '--target_face_size', default=112, 
                                 type=int)
     args_parser.add_argument('-jst', '--json_tracker', default='tracker.json', 
@@ -192,7 +167,13 @@ if __name__ == '__main__':
     args_parser.add_argument('-ign', '--ignored_name', default='Unknown', 
                                 type=str)
     args_parser.add_argument('-nvi', '--n_video_intervals', default=5, type=int)
-    args_parser.add_argument('-tap', '--time_appear', default=2, type=int)
+    args_parser.add_argument('-tap', '--n_time_appear', default=4, type=int)
+
+    args_parser.add_argument('--inference_method', default='seq_fd_vs_aln', type=str)
+    args_parser.add_argument('--min_dim_box', default=50, type=int)
+    args_parser.add_argument('--box_ratio', default=2.0, type=float)
+    args_parser.add_argument('--log_step', default=100, type=int)
+    args_parser.add_argument('--recog_threshold', default=0.9, type=float)
 
     args = args_parser.parse_args()
 
@@ -204,9 +185,9 @@ if __name__ == '__main__':
     label2name_df = pd.read_csv(args.label2name)
     
     # face detection model
-    mtcnn = model_md.MTCNN(args.face_size, keep_all=True, device=device, 
-                    min_face_size=args.min_face_size)
-    mtcnn.eval()
+    det_args = read_json(args.detection_args)
+    detection_md = getattr(model_md, args.detection)(**det_args)
+    detection_md.eval()
 
     # face alignment model
     fa_model = face_alignment.FaceAlignment(face_alignment.LandmarksType._2D, 
@@ -227,10 +208,15 @@ if __name__ == '__main__':
 
     # choose frames for a second
     frame_idxes = list(args.frame_idxes) 
-    tracker_df = main(args, mtcnn, emb_model, classify_model, fa_model, device, 
-                        label2name_df, target_fs, center_point, frame_idxes)
+    if not os.path.exists(args.output_tracker):
+        print('Create tracker file {}'.format(args.output_tracker))
+        tracker_df = main(args, detection_md, emb_model, classify_model, fa_model, device, 
+                            label2name_df, target_fs, center_point, frame_idxes)
+    else:
+        print('Re-use tracker file {}'.format(args.output_tracker))
+        tracker_df = pd.read_csv(args.output_tracker)
 
     # export JSON file for video celebrity indexing 
-    export_json_stat(tracker_df, args.json_tracker, 
-                        args.time_appear*len(frame_idxes))
+    export_json_stat(tracker_df, args.json_tracker, args.n_video_intervals,
+                        args.n_time_appear, args.ignored_name)
 

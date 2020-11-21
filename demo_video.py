@@ -19,7 +19,7 @@ from data_loader import transforms_default
 
 def seq_detection_and_alignment(np_image, detect_model, embedding_model, fa_model,
                             classify_model, device, label2name_df, target_fs, 
-                            center_point, box_requirements):
+                            center_point, box_requirements, threshold):
     rgb_image = cv2.cvtColor(np_image, cv2.COLOR_BGR2RGB)
     boxes, _ = detect_model.inference(rgb_image, landmark=False)
     if len(boxes) > 0:
@@ -45,8 +45,8 @@ def seq_detection_and_alignment(np_image, detect_model, embedding_model, fa_mode
 
             aligned_faces_tf = torch.stack(tf_list, dim=0)
             chosen_boxes = [boxes[x] for x in remain_idx]
-            embeddings = find_embedding(aligned_faces_tf.to(device), emb_model)
-            names = identify_person(embeddings, classify_model, label2name_df)
+            embeddings = find_embedding(aligned_faces_tf.to(device), embedding_model)
+            names = identify_person(embeddings, classify_model, label2name_df, threshold)
             np_image_recog = draw_boxes_on_image(np_image, chosen_boxes, names)
             return np_image_recog, names
         
@@ -56,7 +56,7 @@ def seq_detection_and_alignment(np_image, detect_model, embedding_model, fa_mode
 
 def parallel_detection_and_alignment(np_image, detect_model, embedding_model, fa_model,
                             classify_model, device, label2name_df, target_fs, 
-                            center_point):
+                            center_point, threshold):
     rgb_image = cv2.cvtColor(np_image, cv2.COLOR_BGR2RGB)
     boxes, _, landmarks = detect_model.inference(rgb_image, landmark=True)
     if len(boxes) > 0:
@@ -78,8 +78,8 @@ def parallel_detection_and_alignment(np_image, detect_model, embedding_model, fa
                 tf_list.append(tf_face)
 
             aligned_faces_tf = torch.stack(tf_list, dim=0)
-            embeddings = find_embedding(aligned_faces_tf.to(device), emb_model)
-            names = identify_person(embeddings, classify_model, label2name_df)
+            embeddings = find_embedding(aligned_faces_tf.to(device), embedding_model)
+            names = identify_person(embeddings, classify_model, label2name_df, threshold)
             np_image_recog = draw_boxes_on_image(np_image, chosen_boxes, names)
             return np_image_recog, names
         
@@ -140,12 +140,12 @@ def main(args, detect_model, embedding_model, classify_model, fa_model, device,
             recognized_img, names = seq_detection_and_alignment(frame, detect_model, 
                                     embedding_model, fa_model, classify_model, 
                                     device, label2name_df, target_fs, 
-                                    center_point, box_requirements)
+                                    center_point, box_requirements, args.recog_threshold)
         elif args.inference_method == 'par_fd_vs_aln':
             recognized_img, names = parallel_detection_and_alignment(frame, detect_model, 
                                     embedding_model, fa_model, classify_model, 
                                     device, label2name_df, target_fs, 
-                                    center_point)
+                                    center_point, args.recog_threshold)
         else:
             print('Do not support {} method.'.format(args.args.inference_method))
             break
@@ -205,6 +205,7 @@ if __name__ == '__main__':
     args_parser.add_argument('--inference_method', default='seq_fd_vs_aln', type=str)
     args_parser.add_argument('--min_dim_box', default=50, type=int)
     args_parser.add_argument('--box_ratio', default=2.0, type=float)
+    args_parser.add_argument('--recog_threshold', default=0.0, type=float)
 
     args = args_parser.parse_args()
 

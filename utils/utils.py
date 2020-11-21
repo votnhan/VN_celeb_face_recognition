@@ -69,3 +69,11 @@ def plot_train_val_loss(log_file, out_file):
     plt.savefig(out_file)
     print('Plot train and val loss to {}'.format(out_file))
 
+
+def convert_sec_to_max_time_quantity(second):
+    h = second // 3600
+    remain_time = second % 3600
+    m = remain_time // 60
+    s = remain_time % 60
+    return '{}h:{}m:{:.2f}s'.format(h, m, s)
+
