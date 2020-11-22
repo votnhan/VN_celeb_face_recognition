@@ -1,0 +1,99 @@
+label,name
+3,Ribi Sachi
+6,Suboi
+14,Mai Phuong Thuy
+18,Chi Pu
+31,Dam Vinh Hung
+34,Cam Ly
+43,Huu Chau
+53,Thanh Thuy
+71,Bao Thy
+83,Ngo Thanh Van
+94,Hong Anh
+109,Bang Kieu
+131,Minh Hang
+136,Quyen Linh
+141,Ho Ngoc Ha
+144,Thu Minh
+151,Tang Thanh Ha
+162,Cat Phuong
+163,Khong Tu Quynh
+164,Hoai Lam
+174,Bao Quoc
+185,Chau Tinh Tri
+188,Pew Pew
+201,Diem My
+216,Huong Giang
+220,Huong Thuy
+227,Quang Le
+229,Van Leg
+236,Toc Tien
+238,Tran Thanh
+246,Vu Cat Tuong
+263,Nhu Quynh
+318,Thanh Ha
+364,Ngoc Son
+379,Ho Quang Hieu
+391,Pham Anh Khoa
+393,Ngoc Quyen
+403,Le Hoang
+409,Hong Van
+414,Dinh Xuan Truong
+416,Ninh Duong Lan Ngoc
+429,Thanh Ngoc
+433,Misthy
+445,Pham Nhat Vuong
+462,Karik
+477,Bui Tien Dung
+486,Luong Bich Huu
+500,Lam Vy Da
+501,Sy Luan
+502,Dai Nghia
+505,Siu Black
+508,Vinh Rau
+511,Viet Huong
+512,Noo Phuoc Thinh
+514,Minh Tuyet
+519,Truong Minh Quoc Thai
+540,Ly Nha Ky
+547,Phuong My Chi
+549,Huong Lan
+554,Dong Nhi
+566,Son Tung
+582,Sam
+594,Kim Xuan
+613,Wanbi Tuan Anh
+620,Co Giao Tran
+632,Quang Vinh
+659,Thai Vu
+677,Nguyen Ngoc Ngan
+692,Chi Tai
+693,Truong Giang
+698,Ngan Khanh
+730,Huynh Phuong
+746,Nhat Tinh Anh
+747,Cong Phuong
+754,Thuy Lam
+775,Dan Truong
+776,Mac Van Khoa
+777,Tuan Ngoc
+808,Lam Truong
+824,Phuong Thanh
+826,Phan Manh Quynh
+830,Bich Phuong
+844,Doan Trang
+849,Miu Le
+857,Thanh Hang
+886,Minh Nhi
+920,Nam Cuong
+947,Huong Tram
+950,Tien Tien
+957,Lai Van Sam
+958,Tuan Hung
+960,My Tam
+964,Bui Anh Tuan
+989,Thanh Loc
+996,Den Vau
+1011,Hien Thuc
+1015,Hoai Linh
+1020,Unknown

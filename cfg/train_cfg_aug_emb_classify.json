@@ -90,7 +90,8 @@
                 "name": "iresnet100",
                 "args": {
                     "pretrained": true,
-                    "progress": true
+                    "progress": true,
+                    "checkpoint_path":""
                 }
             }
         ]

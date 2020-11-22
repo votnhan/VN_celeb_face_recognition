@@ -94,8 +94,9 @@ def main(args, detect_model, embedding_model, classify_model, fa_model, device,
         processed_frame += 1
         time_in_video = count / fps
         if (processed_frame % args.log_step) == 0:
-            print('Processing for frame: {}, time: {:.2f} s'.format(count, 
-                        time_in_video))
+            hms_time = conconvert_sec_to_max_time_quantity(time_in_video)
+            print('Processing for frame: {}, time: {}'.format(count, 
+                        hms_time))
     
         if args.inference_method == 'seq_fd_vs_aln':
             recognized_img, names = seq_detection_and_alignment(frame, detect_model, 

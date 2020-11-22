@@ -41,7 +41,11 @@
             "num_workers": 0
         }
     },
-    "transforms": "default",
+    "transforms": {
+        "name": "rank1_aug",
+        "resize": false,
+        "encoder_img_size": 160
+    },
     "metrics": ["accuracy"],
     "loss": "neg_log_llhood",
     "model": {
@@ -50,14 +54,26 @@
             "pretrained": "vggface2",
             "classify": true,
             "num_classes": 1000
-        }
+        },
+        "some_models": [
+            {
+                "name": "iresnet100",
+                "args": {
+                    "pretrained": true,
+                    "progress": true,
+                    "checkpoint_path":"",
+                    "n_classes": 1020,
+                    "freeze_weights": true
+                }
+            }
+        ]
     },
     "trainer":{
         "name": "ClassificationTrainer",
         "resume_path": "",
         "save_dir": "saved",
         "device": "GPU",
-        "log_step": 50,
+        "log_step": 30,
         "do_validation": true,
         "validation_step": 1,
         "epochs": 100,
@@ -70,7 +86,7 @@
     "optimizer":{
         "name": "Adam",
         "args":{
-            "lr": 0.00001,
+            "lr": 0.001,
             "weight_decay": 1e-04
         }   
     },

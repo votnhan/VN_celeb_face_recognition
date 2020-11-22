@@ -1,4 +1,5 @@
 import torch
+from torch.nn import functional as F
 from torch import nn
 from torchvision.models.utils import load_state_dict_from_url
 
@@ -64,7 +65,8 @@ class IResNet(nn.Module):
     fc_scale = 7 * 7
 
     def __init__(self, block, layers, num_features=512, zero_init_residual=False,
-                 groups=1, width_per_group=64, replace_stride_with_dilation=None):
+                 groups=1, width_per_group=64, replace_stride_with_dilation=None, 
+                 n_classes=None):
         super(IResNet, self).__init__()
 
         self.inplanes = 64
@@ -95,6 +97,10 @@ class IResNet(nn.Module):
         self.dropout = nn.Dropout2d(p=0.4, inplace=True)
         self.fc = nn.Linear(512 * block.expansion * self.fc_scale, num_features)
         self.features = nn.BatchNorm1d(num_features, eps=2e-05, momentum=0.9)
+        self.classify = False
+        if n_classes is not None:
+            self.logits = nn.Linear(512, n_classes)
+            self.classify = True
 
         for m in self.modules():
             if isinstance(m, nn.Conv2d):
@@ -146,15 +152,31 @@ class IResNet(nn.Module):
         x = self.fc(x)
         x = self.features(x)
 
+        if self.classify:
+            x = self.logits(x)
+            x = F.log_softmax(x, dim=1)
+
         return x
 
 
-def _iresnet(arch, block, layers, pretrained, progress, **kwargs):
+def _iresnet(arch, block, layers, pretrained, progress, freeze_weights, checkpoint_path='', 
+                **kwargs):
     model = IResNet(block, layers, **kwargs)
     if pretrained:
-        state_dict = load_state_dict_from_url(model_urls[arch],
-                                              progress=progress)
-        model.load_state_dict(state_dict)
+        if checkpoint_path == '':
+            state_dict = load_state_dict_from_url(model_urls[arch],
+                                                progress=progress)
+        else:
+            state_dict = torch.load(checkpoint_path)['state_dict']
+        model.load_state_dict(state_dict, strict=False)
+
+    if freeze_weights:
+        print('Freezing weights !')
+        for param in model.parameters():
+            param.requires_grad = False
+        for param in model.logits.parameters():
+            param.requires_grad = True
+
     return model
 
 

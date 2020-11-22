@@ -2,7 +2,10 @@ import os
 import json
 import matplotlib.pyplot as plt
 import pandas as pd
+import glob
+import shutil
 from PIL import Image
+
 
 class MetricTracker:
     def __init__(self, *keys, writer=None):
@@ -77,3 +80,47 @@ def convert_sec_to_max_time_quantity(second):
     s = remain_time % 60
     return '{}h:{}m:{:.2f}s'.format(h, m, s)
 
+
+def convert_ds_folder_2_def_structure(root_dir, output_dir, label_file):
+    if not os.path.exists(output_dir):
+        os.makedirs(output_dir)
+
+    path_str = root_dir + '/*/*'
+    image_paths = glob.glob(path_str)
+    n_images = len(image_paths)
+    label_list = []
+    for idx, image_path in enumerate(image_paths):
+        print('-----{}/{}-----'.format(idx, n_images))
+        label, image_file = image_path.split('/')[-2: ]
+        image_name, ext = image_file.split('.')
+        new_image_file = '{}_{}.{}'.format(label, image_name, ext)
+        new_img_path = os.path.join(output_dir, new_image_file)
+        shutil.copyfile(image_path, new_img_path)
+        print('Copied file {}'.format(image_path))
+        label_list.append((new_image_file, int(label)-1))
+
+    label_df = pd.DataFrame(data=label_list, columns=['image', 'label'])
+    label_df.to_csv(label_file, index=False)
+    print('Saved label file {}.'.format(label_file))
+
+def convert_id_ds_2_def_structure(root_dir, output_dir, label_file):
+    if not os.path.exists(output_dir):
+        os.makedirs(output_dir)
+
+    path_str = root_dir + '/*/*'
+    image_paths = glob.glob(path_str)
+    n_images = len(image_paths)
+    label_list = []
+    for idx, image_path in enumerate(image_paths):
+        print('-----{}/{}-----'.format(idx, n_images))
+        label, image_file = image_path.split('/')[-2: ]
+        image_name, ext = image_file.split('.')
+        new_image_file = '{}_{}.{}'.format(label, image_name, ext)
+        new_img_path = os.path.join(output_dir, new_image_file)
+        shutil.copyfile(image_path, new_img_path)
+        print('Copied file {}'.format(image_path))
+        label_list.append((new_image_file, int(label)))
+
+    label_df = pd.DataFrame(data=label_list, columns=['image', 'label'])
+    label_df.to_csv(label_file, index=False)
+    print('Saved label file {}.'.format(label_file))

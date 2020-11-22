@@ -23,6 +23,7 @@ def main(config):
     # Create transforms
     tf_config = config['transforms']
     transforms = transforms_dict.get(tf_config['name'])
+    print('transforms: {}'.format(tf_config['name']))
     if tf_config['resize']:
         transforms.transforms = [tf.Resize(tf_config['encoder_img_size'])] + \
                                     transforms.transforms
