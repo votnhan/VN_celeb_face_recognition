@@ -1,4 +1,6 @@
 {
     "pretrained": true,
-    "progress": true
+    "progress": true,
+    "freeze_weights": false,
+    "checkpoint_path":""
 }

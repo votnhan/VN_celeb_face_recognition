@@ -167,6 +167,7 @@ def _iresnet(arch, block, layers, pretrained, progress, freeze_weights, checkpoi
             state_dict = load_state_dict_from_url(model_urls[arch],
                                                 progress=progress)
         else:
+            print('Loaded encoder state dict from checkpoint path {}'.format(checkpoint_path))
             state_dict = torch.load(checkpoint_path)['state_dict']
         model.load_state_dict(state_dict, strict=False)
 

@@ -134,7 +134,7 @@ def move_landmark_to_box(box, landmark):
     
 
 def sequential_detection_and_alignment(rgb_image, detection_md, fa_model, emb_model, classify_model, 
-                                        center_point, target_fs, box_requirements):
+                                        center_point, target_fs, box_requirements, threshold):
     boxes, _,  = detection_md.inference(rgb_image, landmark=False)
     np_image = cv2.cvtColor(rgb_image, cv2.COLOR_RGB2BGR)
     if len(boxes) > 0:
@@ -161,7 +161,7 @@ def sequential_detection_and_alignment(rgb_image, detection_md, fa_model, emb_mo
             aligned_faces_tf = torch.stack(tf_list, dim=0)
             chosen_boxes = [boxes[x] for x in remain_idx]
             embeddings = find_embedding(aligned_faces_tf.to(device), emb_model)
-            names = identify_person(embeddings, classify_model, label2name_df)
+            names = identify_person(embeddings, classify_model, label2name_df, threshold)
             np_image_recog = draw_boxes_on_image(np_image, chosen_boxes, names)
             cv2.imwrite(args.output_path, np_image_recog)
             print('Face recognized image saved at {} ...'.format(args.output_path))
@@ -172,7 +172,7 @@ def sequential_detection_and_alignment(rgb_image, detection_md, fa_model, emb_mo
     
 
 def parallel_detection_and_alignment(rgb_image, detection_md, emb_model, classify_model, center_point, 
-                                        target_fs):
+                                        target_fs, threshold):
     boxes, _, landmarks, = detection_md.inference(rgb_image, landmark=True)
     np_image = cv2.cvtColor(rgb_image, cv2.COLOR_RGB2BGR)
     if len(boxes) > 0:
@@ -196,7 +196,7 @@ def parallel_detection_and_alignment(rgb_image, detection_md, emb_model, classif
             aligned_faces_tf = torch.stack(tf_list, dim=0)
             
             embeddings = find_embedding(aligned_faces_tf.to(device), emb_model)
-            names = identify_person(embeddings, classify_model, label2name_df)
+            names = identify_person(embeddings, classify_model, label2name_df, threshold)
             np_image_recog = draw_boxes_on_image(np_image, chosen_boxes, names)
             cv2.imwrite(args.output_path, np_image_recog)
             print('Face recognized image saved at {} ...'.format(args.output_path))
@@ -234,6 +234,7 @@ if __name__ == '__main__':
     args_parser.add_argument('--inference_method', default='seq_fd_vs_aln', type=str)
     args_parser.add_argument('--min_dim_box', default=50, type=int)
     args_parser.add_argument('--box_ratio', default=2.0, type=float)
+    args_parser.add_argument('--recog_threshold', default=0.0, type=float)
     
     args = args_parser.parse_args()
 
@@ -274,9 +275,9 @@ if __name__ == '__main__':
             'box_ratio': args.box_ratio
         }
         sequential_detection_and_alignment(rgb_image, detection_md, fa_model, emb_model, classify_model, 
-                                            center_point, target_fs, box_requirements)
+                                            center_point, target_fs, box_requirements, args.recog_threshold)
     elif args.inference_method == 'par_fd_vs_aln':
         parallel_detection_and_alignment(rgb_image, detection_md, emb_model, classify_model, 
-                                            center_point, target_fs)
+                                            center_point, target_fs, args.recog_threshold)
     else:
         print('Do not support {} method.'.format(args.args.inference_method))

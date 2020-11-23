@@ -91,7 +91,8 @@
                 "args": {
                     "pretrained": true,
                     "progress": true,
-                    "checkpoint_path":""
+                    "checkpoint_path":"",
+                    "freeze_weights": false
                 }
             }
         ]

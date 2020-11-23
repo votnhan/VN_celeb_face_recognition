@@ -67,7 +67,9 @@ class ClassificationTrainer(BaseTrainer):
 
                 if save_result:
                     output_cls = torch.argmax(output, 1)
-                    result.append([id_img, target, output_cls])
+                    prob_pred = [output[idx][cls].exp().item() for idx, cls in \
+                                    enumerate(output_cls)] 
+                    result.append([id_img, target, output_cls, prob_pred])
 
         log = self.val_loss.result()
         log.update(self.val_metrics.result())
