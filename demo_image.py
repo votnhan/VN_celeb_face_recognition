@@ -44,7 +44,7 @@ def identify_person(embeddings, classify_model, name_df, threshold=0.0):
         if prob >= threshold:
             filtered_preditions.append(preditions_np[idx])
         else:
-            filtered_preditions.append(preditions_np.shape[0]-1)
+            filtered_preditions.append(output.size(1))
             
     list_names = []
     for pred in filtered_preditions:

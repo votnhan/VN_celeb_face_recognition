@@ -94,7 +94,7 @@ def main(args, detect_model, embedding_model, classify_model, fa_model, device,
         processed_frame += 1
         time_in_video = count / fps
         if (processed_frame % args.log_step) == 0:
-            hms_time = conconvert_sec_to_max_time_quantity(time_in_video)
+            hms_time = convert_sec_to_max_time_quantity(time_in_video)
             print('Processing for frame: {}, time: {}'.format(count, 
                         hms_time))
     
@@ -124,7 +124,7 @@ def main(args, detect_model, embedding_model, classify_model, fa_model, device,
     
     end_time = time.time()
     processed_time = end_time - start_time
-    fps_process = int(count / processed_time)
+    fps_process = int(processed_frame / processed_time)
     tracked_df = pd.DataFrame(data=tracker, columns=['Time', 'Names', 'Frame_idx'])
     tracked_df.to_csv(args.output_tracker, index=False)
     cap.release()
