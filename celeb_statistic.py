@@ -8,6 +8,7 @@ import pandas as pd
 import numpy as np
 import face_alignment
 import torch
+import pafy
 import models as model_md 
 from collections import Counter
 from pathlib import Path
@@ -24,7 +25,7 @@ from utils import convert_sec_to_max_time_quantity
 
 
 def export_json_stat(tracker_df, output_js_path, n_video_intervals, n_appear=4, 
-                        unknown_name='Unknown'):
+                        unknown_name='Unknown', get_bboxes=False):
     interval_counter = 0
     dict_track = {}
     n_rows = len(tracker_df['Time'])
@@ -38,21 +39,31 @@ def export_json_stat(tracker_df, output_js_path, n_video_intervals, n_appear=4,
         else:
             end_range = (i+1)*n_rows_in_itv
         df_for_itv = tracker_df.iloc[start_range: end_range]
-        names_for_itv = []
-        for names in df_for_itv['Names']:
-            list_names = ast.literal_eval(names)
-            names_for_itv += list_names
         
-        unique_names_for_itv = []
-        for k, v in Counter(names_for_itv).items():
-            if (k != unknown_name) and (v >= n_appear):
-                unique_names_for_itv.append(k)
+        bboxes_dict = {}
+        for names_str, bboxes_str, time_s in zip(df_for_itv['Names'], df_for_itv['Bboxes'], 
+                                        df_for_itv['Time']):
+            hms_time = convert_sec_to_max_time_quantity(time_s)
+            list_names = ast.literal_eval(names_str)
+            list_bboxes = ast.literal_eval(bboxes_str)
+            for name, bbox in zip(list_names, list_bboxes):
+                bbox_item = {'time': hms_time,
+                            'bbox': bbox}
+                if name not in bboxes_dict:
+                    bboxes_dict[name] = [bbox_item]
+                else:
+                    bboxes_dict[name] += [bbox_item]
 
+        final_bboxes_dict = {}
+        for k, v in bboxes_dict.items():
+            if (k != unknown_name) and (len(v) >= n_appear):
+                final_bboxes_dict[k] = v
+                
         start_itv = convert_sec_to_max_time_quantity(df_for_itv['Time'].iloc[0])
         end_itv = convert_sec_to_max_time_quantity(df_for_itv['Time'].iloc[-1])
         dict_track[str(interval_counter)] = {
             "interval": (start_itv, end_itv),
-            "celebrities": unique_names_for_itv
+            "celebrities": final_bboxes_dict
         }
     
     write_json(output_js_path, dict_track, log=True)
@@ -77,7 +88,17 @@ def main(args, detect_model, embedding_model, classify_model, fa_model, device,
       print('Using global a threshold !')
       threshold = args.recog_threshold
     
-    cap = cv2.VideoCapture(args.video_path)
+    if args.youtube_video:
+        pafy_obj = pafy.new(args.video_path)
+        play = pafy_obj.getbest(preftype="mp4")
+        if play is None:
+            print('This Youtube video did not support mp4 format !')
+            return 
+        video_path = play.url
+    else:
+        video_path = args.video_path
+    
+    cap = cv2.VideoCapture(video_path)
     count = 0
     processed_frame = 0
     fps = cap.get(cv2.CAP_PROP_FPS)
@@ -131,11 +152,13 @@ def main(args, detect_model, embedding_model, classify_model, fa_model, device,
             tracker.append((time_in_video, str(names), count))
         else:
             if bboxes is None:
-                list_bboxes = []
+                scaled_bboxes = []
             else:
-                list_bboxes = [list(x) for x in bboxes]
-                
-            tracker.append((time_in_video, str(names), count, str(list_bboxes)))
+                h, w, _ = frame.shape
+                scale = np.array([w, h, w, h])
+                scaled_bboxes = [list(x / scale) for x in bboxes]
+            
+            tracker.append((time_in_video, str(names), count, str(scaled_bboxes)))
 
     
     end_time = time.time()
@@ -193,6 +216,7 @@ if __name__ == '__main__':
     args_parser.add_argument('--recog_threshold', default=0.7, type=float)
     args_parser.add_argument('--local_thresholds', default='', type=str)
     args_parser.add_argument('--track_bbox', action='store_true')
+    args_parser.add_argument('--youtube_video', action='store_true')
 
     args = args_parser.parse_args()
 

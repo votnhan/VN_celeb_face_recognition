@@ -28,12 +28,15 @@ def detech_faces(image, detect_model):
 
 def find_embedding(image_tensor, embedding_model):
     embedding_model.eval()
-    embeddings = embedding_model(image_tensor)
+    with torch.no_grad():
+        embeddings = embedding_model(image_tensor)
     return embeddings.detach()
+
 
 def identify_person(embeddings, classify_model, name_df, threshold):
     classify_model.eval()
-    output = classify_model(embeddings)
+    with torch.no_grad():
+        output = classify_model(embeddings)
     n_classes = output.size(1)
     if type(threshold) is float:
       threshold_dict = {}
