@@ -48,11 +48,11 @@ def seq_detection_and_alignment(np_image, detect_model, embedding_model, fa_mode
             embeddings = find_embedding(aligned_faces_tf.to(device), embedding_model)
             names = identify_person(embeddings, classify_model, label2name_df, threshold)
             np_image_recog = draw_boxes_on_image(np_image, chosen_boxes, names)
-            return np_image_recog, names
+            return np_image_recog, names, chosen_boxes
         
-        return np_image, None
+        return np_image, None, None
     else:
-        return np_image, None
+        return np_image, None, None
 
 def parallel_detection_and_alignment(np_image, detect_model, embedding_model, fa_model,
                             classify_model, device, label2name_df, target_fs, 
@@ -81,12 +81,12 @@ def parallel_detection_and_alignment(np_image, detect_model, embedding_model, fa
             embeddings = find_embedding(aligned_faces_tf.to(device), embedding_model)
             names = identify_person(embeddings, classify_model, label2name_df, threshold)
             np_image_recog = draw_boxes_on_image(np_image, chosen_boxes, names)
-            return np_image_recog, names
+            return np_image_recog, names, chosen_boxes
         
         else:
-            return np_image, None
+            return np_image, None, None
     else:
-        return np_image, None
+        return np_image, None, None
 
 
 def export_video_face_recognition(output_frame_dir, fps, output_path):
@@ -137,12 +137,12 @@ def main(args, detect_model, embedding_model, classify_model, fa_model, device,
         print('Processing for frame: {}, time: {:.2f} s'.format(count, 
                     time_in_video))
         if args.inference_method == 'seq_fd_vs_aln':
-            recognized_img, names = seq_detection_and_alignment(frame, detect_model, 
+            recognized_img, names, _ = seq_detection_and_alignment(frame, detect_model, 
                                     embedding_model, fa_model, classify_model, 
                                     device, label2name_df, target_fs, 
                                     center_point, box_requirements, args.recog_threshold)
         elif args.inference_method == 'par_fd_vs_aln':
-            recognized_img, names = parallel_detection_and_alignment(frame, detect_model, 
+            recognized_img, names, _ = parallel_detection_and_alignment(frame, detect_model, 
                                     embedding_model, fa_model, classify_model, 
                                     device, label2name_df, target_fs, 
                                     center_point, args.recog_threshold)

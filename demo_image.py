@@ -31,17 +31,28 @@ def find_embedding(image_tensor, embedding_model):
     embeddings = embedding_model(image_tensor)
     return embeddings.detach()
 
-def identify_person(embeddings, classify_model, name_df, threshold=0.0):
+def identify_person(embeddings, classify_model, name_df, threshold):
     classify_model.eval()
     output = classify_model(embeddings)
+    n_classes = output.size(1)
+    if type(threshold) is float:
+      threshold_dict = {}
+      for i in range(n_classes):
+        threshold_dict[str(i)] = threshold
+    else:
+      
+      threshold_dict = threshold
+
     preditions = torch.argmax(output, dim=1)
     preditions_np = preditions.detach().cpu().numpy()
     probs = torch.exp(output).detach().cpu().numpy()
 
     chosen_prob = [probs[idx][chosen_idx] for idx, chosen_idx in enumerate(preditions_np)]
     filtered_preditions = []
+
     for idx, prob in enumerate(chosen_prob):
-        if prob >= threshold:
+        main_thres = threshold_dict[str(preditions_np[idx])]
+        if prob >= main_thres:
             filtered_preditions.append(preditions_np[idx])
         else:
             filtered_preditions.append(output.size(1))

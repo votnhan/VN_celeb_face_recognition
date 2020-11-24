@@ -69,6 +69,13 @@ def main(args, detect_model, embedding_model, classify_model, fa_model, device,
             'min_dim': args.min_dim_box,
             'box_ratio': args.box_ratio
         }
+
+    if args.local_thresholds != '':
+      print('Using local thresholds !')
+      threshold = read_json(args.local_thresholds)
+    else:
+      print('Using global a threshold !')
+      threshold = args.recog_threshold
     
     cap = cv2.VideoCapture(args.video_path)
     count = 0
@@ -99,15 +106,15 @@ def main(args, detect_model, embedding_model, classify_model, fa_model, device,
                         hms_time))
     
         if args.inference_method == 'seq_fd_vs_aln':
-            recognized_img, names = seq_detection_and_alignment(frame, detect_model, 
+            recognized_img, names, bboxes = seq_detection_and_alignment(frame, detect_model, 
                                     embedding_model, fa_model, classify_model, 
                                     device, label2name_df, target_fs, 
-                                    center_point, box_requirements, args.recog_threshold)
+                                    center_point, box_requirements, threshold)
         elif args.inference_method == 'par_fd_vs_aln':
-            recognized_img, names = parallel_detection_and_alignment(frame, detect_model, 
+            recognized_img, names, bboxes = parallel_detection_and_alignment(frame, detect_model, 
                                     embedding_model, fa_model, classify_model, 
                                     device, label2name_df, target_fs, 
-                                    center_point, args.recog_threshold)
+                                    center_point, threshold)
         else:
             print('Do not support {} method.'.format(args.args.inference_method))
             break
@@ -120,12 +127,21 @@ def main(args, detect_model, embedding_model, classify_model, fa_model, device,
         if names is None:
             names = []
         
-        tracker.append((time_in_video, str(names), count))
+        if not args.track_bbox:
+            tracker.append((time_in_video, str(names), count))
+        else:
+            if bboxes is None:
+                list_bboxes = []
+            else:
+                list_bboxes = [list(x) for x in bboxes]
+                
+            tracker.append((time_in_video, str(names), count, str(list_bboxes)))
+
     
     end_time = time.time()
     processed_time = end_time - start_time
     fps_process = int(processed_frame / processed_time)
-    tracked_df = pd.DataFrame(data=tracker, columns=['Time', 'Names', 'Frame_idx'])
+    tracked_df = pd.DataFrame(data=tracker, columns=['Time', 'Names', 'Frame_idx', 'Bboxes'])
     tracked_df.to_csv(args.output_tracker, index=False)
     cap.release()
     print('Saved tracker file in {} ...'.format(args.output_tracker))
@@ -168,13 +184,15 @@ if __name__ == '__main__':
     args_parser.add_argument('-ign', '--ignored_name', default='Unknown', 
                                 type=str)
     args_parser.add_argument('-nvi', '--n_video_intervals', default=5, type=int)
-    args_parser.add_argument('-tap', '--n_time_appear', default=4, type=int)
+    args_parser.add_argument('-tap', '--n_time_appear', default=8, type=int)
 
     args_parser.add_argument('--inference_method', default='seq_fd_vs_aln', type=str)
     args_parser.add_argument('--min_dim_box', default=50, type=int)
     args_parser.add_argument('--box_ratio', default=2.0, type=float)
     args_parser.add_argument('--log_step', default=100, type=int)
-    args_parser.add_argument('--recog_threshold', default=0.9, type=float)
+    args_parser.add_argument('--recog_threshold', default=0.7, type=float)
+    args_parser.add_argument('--local_thresholds', default='', type=str)
+    args_parser.add_argument('--track_bbox', action='store_true')
 
     args = args_parser.parse_args()
 
