@@ -13,14 +13,18 @@ import models as model_md
 from collections import Counter
 from pathlib import Path
 from itertools import groupby
-from utils import read_image, read_json, write_json
+from utils import read_image, read_json, write_json, load_pickle
 from demo_image import find_embedding, identify_person, \
                         draw_boxes_on_image, load_model_classify, \
-                            get_face_from_boxes, align_face
-from demo_video import seq_detection_and_alignment, parallel_detection_and_alignment
+                        get_face_from_boxes, align_face, \
+                        move_landmark_to_box, recognize_celeb, \
+                        recognize_emotion, draw_emotions, \
+                        sequential_detect_and_align, \
+                        parallel_detect_and_align
+
 from imgaug import augmenters as iaa
 from align_face import alignment, center_point_dict
-from data_loader import transforms_default
+from data_loader import transforms_default, trans_emotion_inf
 from utils import convert_sec_to_max_time_quantity
 
 
@@ -81,6 +85,11 @@ def main(args, detect_model, embedding_model, classify_model, fa_model, device,
             'box_ratio': args.box_ratio
         }
 
+    if args.recog_emotion:
+        idx2etag = load_pickle(args.etag2idx_file)['idx2key']
+        emt_args = read_json(args.emotion_args)
+        emt_model = getattr(model_md, args.emotion)(**emt_args).to(device)
+
     if args.local_thresholds != '':
       print('Using local thresholds !')
       threshold = read_json(args.local_thresholds)
@@ -125,17 +134,44 @@ def main(args, detect_model, embedding_model, classify_model, fa_model, device,
             hms_time = convert_sec_to_max_time_quantity(time_in_video)
             print('Processing for frame: {}, time: {}'.format(count, 
                         hms_time))
-    
+       
+        rgb_image = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
         if args.inference_method == 'seq_fd_vs_aln':
-            recognized_img, names, bboxes = seq_detection_and_alignment(frame, detect_model, 
-                                    embedding_model, fa_model, classify_model, 
-                                    device, label2name_df, target_fs, 
-                                    center_point, box_requirements, threshold)
+            recognized_img, names = frame, None
+            alg_face_list, chosen_boxes = sequential_detect_and_align(rgb_image, 
+                                            detection_md, box_requirements, False)
+            if len(chosen_boxes) > 0:
+                names = recognize_celeb(alg_face_list, chosen_boxes, device, 
+                            emb_model, classify_model, transforms_default, 
+                                label2name_df, args.recog_threshold)
+                np_image_recog = draw_boxes_on_image(frame, chosen_boxes, names)
+
+                if emt_model is not None:
+                    map_func = np.vectorize(lambda x: idx2etag[x])
+                    emotions, probs = recognize_emotion(alg_face_list, device, 
+                                            emt_model, trans_emotion_inf, map_func)
+                    np_image_recog = draw_emotions(np_image_recog, chosen_boxes, 
+                                        emotions, probs)
+                recognized_img = np_image_recog
+                
         elif args.inference_method == 'par_fd_vs_aln':
-            recognized_img, names, bboxes = parallel_detection_and_alignment(frame, detect_model, 
-                                    embedding_model, fa_model, classify_model, 
-                                    device, label2name_df, target_fs, 
-                                    center_point, threshold)
+            recognized_img, names = frame, None
+            alg_face_list, chosen_boxes = parallel_detect_and_align(rgb_image, 
+                                        detection_md, False)
+            if len(chosen_boxes) > 0:
+                names = recognize_celeb(alg_face_list, chosen_boxes, device, 
+                                        emb_model, classify_model, 
+                                        transforms_default, 
+                                        label2name_df, args.recog_threshold)
+                np_image_recog = draw_boxes_on_image(frame, chosen_boxes, names)
+
+                if emt_model is not None:
+                    map_func = np.vectorize(lambda x: idx2etag[x])
+                    emotions, probs = recognize_emotion(alg_face_list, device, 
+                                            emt_model, trans_emotion_inf, map_func)
+                    np_image_recog = draw_emotions(np_image_recog, chosen_boxes, 
+                                        emotions, probs)
+                recognized_img = np_image_recog
         else:
             print('Do not support {} method.'.format(args.args.inference_method))
             break
@@ -148,6 +184,7 @@ def main(args, detect_model, embedding_model, classify_model, fa_model, device,
         if names is None:
             names = []
         
+        bboxes = chosen_boxes
         if not args.track_bbox:
             tracker.append((time_in_video, str(names), count))
         else:
@@ -164,7 +201,8 @@ def main(args, detect_model, embedding_model, classify_model, fa_model, device,
     end_time = time.time()
     processed_time = end_time - start_time
     fps_process = int(processed_frame / processed_time)
-    tracked_df = pd.DataFrame(data=tracker, columns=['Time', 'Names', 'Frame_idx', 'Bboxes'])
+    tracked_df = pd.DataFrame(data=tracker, columns=['Time', 'Names', 'Frame_idx', 
+                                'Bboxes'])
     tracked_df.to_csv(args.output_tracker, index=False)
     cap.release()
     print('Saved tracker file in {} ...'.format(args.output_tracker))

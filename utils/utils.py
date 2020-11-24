@@ -4,6 +4,7 @@ import matplotlib.pyplot as plt
 import pandas as pd
 import glob
 import shutil
+import pickle as pkl
 from PIL import Image
 
 
@@ -124,3 +125,8 @@ def convert_id_ds_2_def_structure(root_dir, output_dir, label_file):
     label_df = pd.DataFrame(data=label_list, columns=['image', 'label'])
     label_df.to_csv(label_file, index=False)
     print('Saved label file {}.'.format(label_file))
+
+
+def load_pickle(save_file):
+    with open(save_file, "rb") as of_:
+        return  pkl.load(of_)

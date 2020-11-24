@@ -70,8 +70,19 @@ transforms_rank1_VNceleb_aug = tf.Compose([
   tf.Lambda(to_tensor)
 ])
 
+
+trans_emotion_inf = tf.Compose([
+  tf.Resize(256),
+  tf.CenterCrop(224),
+  tf.ToTensor(),
+  tf.Normalize(mean=[0.485, 0.456, 0.406],
+                    std=[0.229, 0.224, 0.225])
+  ])
+
+
 transforms_dict = {
   'default': transforms_default,
   'facenet_aug': transforms_facenet_aug,
-  'rank1_aug': transforms_rank1_VNceleb_aug
+  'rank1_aug': transforms_rank1_VNceleb_aug,
+  'emotion_inf': trans_emotion_inf
 }
