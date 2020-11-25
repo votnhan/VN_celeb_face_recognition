@@ -45,14 +45,19 @@ def export_json_stat(tracker_df, output_js_path, n_video_intervals, n_appear=4,
         df_for_itv = tracker_df.iloc[start_range: end_range]
         
         bboxes_dict = {}
-        for names_str, bboxes_str, time_s in zip(df_for_itv['Names'], df_for_itv['Bboxes'], 
-                                        df_for_itv['Time']):
+        zip_obj = zip(df_for_itv['Names'], df_for_itv['Bboxes'], 
+                    df_for_itv['Time'], df_for_itv['Emotion'])
+        for names_str, bboxes_str, time_s, emotions in zip_obj:
             hms_time = convert_sec_to_max_time_quantity(time_s)
             list_names = ast.literal_eval(names_str)
             list_bboxes = ast.literal_eval(bboxes_str)
-            for name, bbox in zip(list_names, list_bboxes):
-                bbox_item = {'time': hms_time,
-                            'bbox': bbox}
+            list_emotions = ast.literal_eval(emotions)
+            for name, bbox, emotion in zip(list_names, list_bboxes, list_emotions):
+                bbox_item = {
+                            'time': hms_time,
+                            'bbox': bbox,
+                            'emotions': emotion
+                            }
                 if name not in bboxes_dict:
                     bboxes_dict[name] = [bbox_item]
                 else:
@@ -139,42 +144,32 @@ def main(args, detect_model, embedding_model, classify_model, fa_model, device,
         if args.inference_method == 'seq_fd_vs_aln':
             recognized_img, names = frame, None
             alg_face_list, chosen_boxes = sequential_detect_and_align(rgb_image, 
-                                            detection_md, box_requirements, False)
-            if len(chosen_boxes) > 0:
-                names = recognize_celeb(alg_face_list, chosen_boxes, device, 
-                            emb_model, classify_model, transforms_default, 
-                                label2name_df, args.recog_threshold)
-                np_image_recog = draw_boxes_on_image(frame, chosen_boxes, names)
-
-                if emt_model is not None:
-                    map_func = np.vectorize(lambda x: idx2etag[x])
-                    emotions, probs = recognize_emotion(alg_face_list, device, 
-                                            emt_model, trans_emotion_inf, map_func)
-                    np_image_recog = draw_emotions(np_image_recog, chosen_boxes, 
-                                        emotions, probs)
-                recognized_img = np_image_recog
+                                            detection_md, center_point, target_fs, 
+                                            box_requirements, False)
                 
         elif args.inference_method == 'par_fd_vs_aln':
             recognized_img, names = frame, None
             alg_face_list, chosen_boxes = parallel_detect_and_align(rgb_image, 
-                                        detection_md, False)
-            if len(chosen_boxes) > 0:
-                names = recognize_celeb(alg_face_list, chosen_boxes, device, 
-                                        emb_model, classify_model, 
-                                        transforms_default, 
-                                        label2name_df, args.recog_threshold)
-                np_image_recog = draw_boxes_on_image(frame, chosen_boxes, names)
-
-                if emt_model is not None:
-                    map_func = np.vectorize(lambda x: idx2etag[x])
-                    emotions, probs = recognize_emotion(alg_face_list, device, 
-                                            emt_model, trans_emotion_inf, map_func)
-                    np_image_recog = draw_emotions(np_image_recog, chosen_boxes, 
-                                        emotions, probs)
-                recognized_img = np_image_recog
+                                        detection_md, center_point, target_fs, 
+                                        False)
         else:
             print('Do not support {} method.'.format(args.args.inference_method))
             break
+
+        if len(chosen_boxes) > 0:
+            names = recognize_celeb(alg_face_list, chosen_boxes, device, 
+                        emb_model, classify_model, transforms_default, 
+                            label2name_df, args.recog_threshold)
+            np_image_recog = draw_boxes_on_image(frame, chosen_boxes, names)
+
+            if args.recog_emotion:
+                map_func = np.vectorize(lambda x: idx2etag[x])
+                emotions, probs = recognize_emotion(alg_face_list, device, 
+                                        emt_model, trans_emotion_inf, map_func ,
+                                        args.topk_emotions)
+                np_image_recog = draw_emotions(np_image_recog, chosen_boxes, 
+                                    emotions, probs)
+            recognized_img = np_image_recog
 
         if args.save_frame_recognized:
             image_name = 'frame_{}.png'.format(count)
@@ -185,24 +180,31 @@ def main(args, detect_model, embedding_model, classify_model, fa_model, device,
             names = []
         
         bboxes = chosen_boxes
-        if not args.track_bbox:
-            tracker.append((time_in_video, str(names), count))
-        else:
+        row = [time_in_video, str(names), count]
+        df_columns = ['Time', 'Names', 'Frame_idx']
+        if args.track_bbox:
             if bboxes is None:
                 scaled_bboxes = []
             else:
                 h, w, _ = frame.shape
                 scale = np.array([w, h, w, h])
                 scaled_bboxes = [list(x / scale) for x in bboxes]
-            
-            tracker.append((time_in_video, str(names), count, str(scaled_bboxes)))
-
+                row.append(str(scaled_bboxes))
+                df_columns.append('Bboxes')
+        
+        if args.recog_emotion:
+            emotions_list = []
+            for i in range(emotions.shape[0]):
+                emotions_list.append(list(emotions[i]))
+            row.append(str(emotions_list))
+            df_columns.append('Emotion')
+        
+        tracker.append(row)
     
     end_time = time.time()
     processed_time = end_time - start_time
     fps_process = int(processed_frame / processed_time)
-    tracked_df = pd.DataFrame(data=tracker, columns=['Time', 'Names', 'Frame_idx', 
-                                'Bboxes'])
+    tracked_df = pd.DataFrame(data=tracker, columns=df_columns)
     tracked_df.to_csv(args.output_tracker, index=False)
     cap.release()
     print('Saved tracker file in {} ...'.format(args.output_tracker))
@@ -255,6 +257,16 @@ if __name__ == '__main__':
     args_parser.add_argument('--local_thresholds', default='', type=str)
     args_parser.add_argument('--track_bbox', action='store_true')
     args_parser.add_argument('--youtube_video', action='store_true')
+    args_parser.add_argument('--recog_emotion', action='store_true')
+    args_parser.add_argument('-emt', '--emotion', default='resnet_2branch_50', 
+                                type=str)
+    args_parser.add_argument('-emtargs', '--emotion_args', 
+                                default='cfg/emotion/resnet50_2_branch.json', 
+                                type=str)
+    args_parser.add_argument('-t2i', '--etag2idx_file', 
+                        default='meta_data/emotion_recognition/etag2idx.pkl.keep', 
+                        type=str)
+    args_parser.add_argument('--topk_emotions', default=6, type=int)
 
     args = args_parser.parse_args()
 

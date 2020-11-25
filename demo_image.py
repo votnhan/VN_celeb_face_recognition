@@ -62,15 +62,16 @@ def recognize_celeb(alg_face_list, chosen_boxes, device, emb_model,
 
 
 def recognize_emotion(alg_face_list, device, emt_model, transforms, 
-                        map_label_func):
+                        map_label_func, topk=6):
     emt_tf_list = []
     for face in alg_face_list:
-        tf_face = transforms(face)
+        face_obj = Image.fromarray(face)
+        tf_face = transforms(face_obj)
         emt_tf_list.append(tf_face)
 
     aligned_faces_tf = torch.stack(emt_tf_list, dim=0)
     emotions_cls, probs = find_emotion(aligned_faces_tf.to(device), 
-                            emt_model)
+                            emt_model, topk)
     emotions = map_label_func(emotions_cls)
     return emotions, probs
 
@@ -130,8 +131,8 @@ def draw_emotions(image, bboxes, emotion_tags, emotion_percent):
         percent_pred = emotion_percent[idx]
         for i, (emotion, percent) in enumerate(zip(emotion_pred, percent_pred)):
             cv2.putText(image, '{} - {:.2f}%'.format(emotion, percent*100), 
-                            (int(box[0]), int(box[3]) + (i+1)*16), 
-                            cv2.FONT_HERSHEY_SIMPLEX, 0.35, (0, 255, 0), 1, 
+                            (int(box[0]+5), int(box[1]) + (i+1)*16), 
+                            cv2.FONT_HERSHEY_SIMPLEX, 0.5, (0, 255, 0), 1, 
                             cv2.LINE_AA)
 
     return image
@@ -205,8 +206,8 @@ def move_landmark_to_box(box, landmark):
     return moved_landmark
     
 
-def sequential_detect_and_align(rgb_image, detection_md, box_requirements=None, 
-                                    log=False):
+def sequential_detect_and_align(rgb_image, detection_md, center_point, target_fs, 
+                                    box_requirements=None, log=False):
     boxes, _,  = detection_md.inference(rgb_image, landmark=False)
     if len(boxes) > 0:
         list_face, face_idx = get_face_from_boxes(rgb_image, boxes, box_requirements)
@@ -215,10 +216,11 @@ def sequential_detect_and_align(rgb_image, detection_md, box_requirements=None,
         for idx, face in enumerate(list_face):
             dst = align_face(face, fa_model)
             if dst is not None:
-                aligned_face = alignment(face, center_point, dst, target_fs[0], 
+                bgr_face = cv2.cvtColor(face, cv2.COLOR_RGB2BGR)
+                aligned_face = alignment(bgr_face, center_point, dst, target_fs[0], 
                                 target_fs[1])
-                rgb_alg_face = cv2.cvtColor(aligned_face, cv2.COLOR_BGR2RGB)
-                aligned_face_list.append(rgb_alg_face)
+                aligned_face = cv2.cvtColor(aligned_face, cv2.COLOR_BGR2RGB)
+                aligned_face_list.append(aligned_face)
                 new_face_idx.append(idx)
 
         remain_idx = [face_idx[x] for x in new_face_idx]
@@ -235,7 +237,8 @@ def sequential_detect_and_align(rgb_image, detection_md, box_requirements=None,
         return [], []
     
 
-def parallel_detect_and_align(rgb_image, detection_md, log=False):
+def parallel_detect_and_align(rgb_image, detection_md, center_point, 
+                                target_fs, log=False):
     boxes, _, landmarks, = detection_md.inference(rgb_image, landmark=True)
     if len(boxes) > 0:
         list_face, face_idx = get_face_from_boxes(rgb_image, boxes)
@@ -247,11 +250,11 @@ def parallel_detect_and_align(rgb_image, detection_md, log=False):
             for idx, face in enumerate(list_face):
                 moved_landmark = move_landmark_to_box(chosen_boxes[idx], 
                                     chosen_landmarks[idx])
-                aligned_face = alignment(face, center_point, moved_landmark, 
+                bgr_face = cv2.cvtColor(face, cv2.COLOR_RGB2BGR)
+                aligned_face = alignment(bgr_face, center_point, moved_landmark, 
                                     target_fs[0], target_fs[1])
-                rgb_alg_face = cv2.cvtColor(aligned_face, cv2.COLOR_BGR2RGB)
-                aligned_face_list.append(rgb_alg_face)
-            
+                aligned_face = cv2.cvtColor(aligned_face, cv2.COLOR_BGR2RGB)
+                aligned_face_list.append(aligned_face)
             return aligned_face_list, chosen_boxes
         else:
             if log:
@@ -304,6 +307,7 @@ if __name__ == '__main__':
     args_parser.add_argument('-t2i', '--etag2idx_file', 
                         default='meta_data/emotion_recognition/etag2idx.pkl.keep', 
                         type=str)
+    args_parser.add_argument('--topk_emotions', default=6, type=int)
 
     args = args_parser.parse_args()
 
@@ -350,41 +354,28 @@ if __name__ == '__main__':
             'box_ratio': args.box_ratio
         }
         alg_face_list, chosen_boxes = sequential_detect_and_align(rgb_image, 
-                                        detection_md, box_requirements, True)
-        if len(chosen_boxes) > 0:
-            names = recognize_celeb(alg_face_list, chosen_boxes, device, 
-                        emb_model, classify_model, transforms_default, 
-                            label2name_df, args.recog_threshold)
-            np_image_recog = draw_boxes_on_image(np_image, chosen_boxes, names)
-
-            if emt_model is not None:
-                map_func = np.vectorize(lambda x: idx2etag[x])
-                emotions, probs = recognize_emotion(alg_face_list, device, 
-                                        emt_model, trans_emotion_inf, map_func)
-                np_image_recog = draw_emotions(np_image_recog, chosen_boxes, 
-                                    emotions, probs)
-            
-            cv2.imwrite(args.output_path, np_image_recog)
-            print('Face recognized image saved at {} ...'.format(args.output_path))
-        
+                                        detection_md, center_point, target_fs, 
+                                        box_requirements, True)
     elif args.inference_method == 'par_fd_vs_aln':
         alg_face_list, chosen_boxes = parallel_detect_and_align(rgb_image, 
-                                        detection_md, True)
-        if len(chosen_boxes) > 0:
-            names = recognize_celeb(alg_face_list, chosen_boxes, device, 
-                                    emb_model, classify_model, transforms_default, 
-                                    label2name_df, args.recog_threshold)
-            np_image_recog = draw_boxes_on_image(np_image, chosen_boxes, names)
-
-            if emt_model is not None:
-                map_func = np.vectorize(lambda x: idx2etag[x])
-                emotions, probs = recognize_emotion(alg_face_list, device, 
-                                        emt_model, trans_emotion_inf, map_func)
-                np_image_recog = draw_emotions(np_image_recog, chosen_boxes, 
-                                    emotions, probs)
-
-            cv2.imwrite(args.output_path, np_image_recog)
-            print('Face recognized image saved at {} ...'.format(args.output_path))
-
+                                        detection_md, center_point, target_fs,
+                                         True)
     else:
         print('Do not support {} method.'.format(args.args.inference_method))
+    
+    if len(chosen_boxes) > 0:
+        names = recognize_celeb(alg_face_list, chosen_boxes, device, 
+                    emb_model, classify_model, transforms_default, 
+                        label2name_df, args.recog_threshold)
+        np_image_recog = draw_boxes_on_image(np_image, chosen_boxes, names)
+
+        if args.recog_emotion:
+            map_func = np.vectorize(lambda x: idx2etag[x])
+            emotions, probs = recognize_emotion(alg_face_list, device, 
+                                    emt_model, trans_emotion_inf, map_func, 
+                                    args.topk_emotions)
+            np_image_recog = draw_emotions(np_image_recog, chosen_boxes, 
+                                emotions, probs)
+        
+        cv2.imwrite(args.output_path, np_image_recog)
+        print('Face recognized image saved at {} ...'.format(args.output_path))

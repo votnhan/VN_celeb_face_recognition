@@ -81,7 +81,7 @@ def resnet_2branch_50(pretrained=False, checkpoint_path=None,**kwargs):
         load_state_dict(model, model_zoo.load_url(model_urls['resnet50']))
 
     if checkpoint_path is not None:
-        print('Loaded model from checkpoint path {}'.format(checkpoint_path))
+        print('Loaded emotion model from checkpoint path {}'.format(checkpoint_path))
         state_dict = torch.load(checkpoint_path)['state_dict']
         model = nn.DataParallel(model)
         model.load_state_dict(state_dict)

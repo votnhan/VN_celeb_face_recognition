@@ -10,8 +10,7 @@ import torch
 import models as model_md 
 from pathlib import Path
 from utils import read_image, read_json, load_pickle
-from demo_image import find_embedding, identify_person, \
-                        draw_boxes_on_image, load_model_classify, \
+from demo_image import  draw_boxes_on_image, load_model_classify, \
                         get_face_from_boxes, align_face, \
                         move_landmark_to_box, recognize_celeb, \
                         recognize_emotion, draw_emotions, \
@@ -78,43 +77,33 @@ def main(args, detect_model, embedding_model, classify_model, fa_model, device,
         if args.inference_method == 'seq_fd_vs_aln':
             recognized_img, names = frame, None
             alg_face_list, chosen_boxes = sequential_detect_and_align(rgb_image, 
-                                            detection_md, box_requirements, False)
-            if len(chosen_boxes) > 0:
-                names = recognize_celeb(alg_face_list, chosen_boxes, device, 
-                            emb_model, classify_model, transforms_default, 
-                                label2name_df, args.recog_threshold)
-                np_image_recog = draw_boxes_on_image(frame, chosen_boxes, names)
-
-                if emt_model is not None:
-                    map_func = np.vectorize(lambda x: idx2etag[x])
-                    emotions, probs = recognize_emotion(alg_face_list, device, 
-                                            emt_model, trans_emotion_inf, map_func)
-                    np_image_recog = draw_emotions(np_image_recog, chosen_boxes, 
-                                        emotions, probs)
-                recognized_img = np_image_recog
+                                            detection_md, center_point, 
+                                            target_fs, box_requirements,False)
     
         elif args.inference_method == 'par_fd_vs_aln':
             recognized_img, names = frame, None
             alg_face_list, chosen_boxes = parallel_detect_and_align(rgb_image, 
-                                        detection_md, False)
-            if len(chosen_boxes) > 0:
-                names = recognize_celeb(alg_face_list, chosen_boxes, device, 
-                                        emb_model, classify_model, 
-                                        transforms_default, 
-                                        label2name_df, args.recog_threshold)
-                np_image_recog = draw_boxes_on_image(frame, chosen_boxes, names)
-
-                if emt_model is not None:
-                    map_func = np.vectorize(lambda x: idx2etag[x])
-                    emotions, probs = recognize_emotion(alg_face_list, device, 
-                                            emt_model, trans_emotion_inf, map_func)
-                    np_image_recog = draw_emotions(np_image_recog, chosen_boxes, 
-                                        emotions, probs)
-                recognized_img = np_image_recog
-
+                                        detection_md, center_point, target_fs, 
+                                        False)
         else:
             print('Do not support {} method.'.format(args.args.inference_method))
             break
+
+        if len(chosen_boxes) > 0:
+            names = recognize_celeb(alg_face_list, chosen_boxes, device, 
+                                    emb_model, classify_model, 
+                                    transforms_default, 
+                                    label2name_df, args.recog_threshold)
+            np_image_recog = draw_boxes_on_image(frame, chosen_boxes, names)
+
+            if args.recog_emotion:
+                map_func = np.vectorize(lambda x: idx2etag[x])
+                emotions, probs = recognize_emotion(alg_face_list, device, 
+                                        emt_model, trans_emotion_inf, map_func, 
+                                        args.topk_emotions)
+                np_image_recog = draw_emotions(np_image_recog, chosen_boxes, 
+                                    emotions, probs)
+            recognized_img = np_image_recog
 
         if args.save_frame_recognized != '':
             image_name = 'frame_{}.png'.format(count)
@@ -178,6 +167,10 @@ if __name__ == '__main__':
     args_parser.add_argument('-emtargs', '--emotion_args', 
                                 default='cfg/emotion/resnet50_2_branch.json', 
                                 type=str)
+    args_parser.add_argument('-t2i', '--etag2idx_file', 
+                        default='meta_data/emotion_recognition/etag2idx.pkl.keep', 
+                        type=str)
+    args_parser.add_argument('--topk_emotions', default=6, type=int)
 
     args = args_parser.parse_args()
 

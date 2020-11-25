@@ -1,4 +1,5 @@
 {
     "pretrained": false,
-    "num_classes": 690
+    "num_classes": 690,
+    "checkpoint_path": null
 }
