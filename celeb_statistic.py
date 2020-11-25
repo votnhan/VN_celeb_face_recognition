@@ -141,14 +141,13 @@ def main(args, detect_model, embedding_model, classify_model, fa_model, device,
                         hms_time))
        
         rgb_image = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
+        recognized_img, names = frame, None
         if args.inference_method == 'seq_fd_vs_aln':
-            recognized_img, names = frame, None
             alg_face_list, chosen_boxes = sequential_detect_and_align(rgb_image, 
                                             detection_md, center_point, target_fs, 
                                             box_requirements, False)
                 
         elif args.inference_method == 'par_fd_vs_aln':
-            recognized_img, names = frame, None
             alg_face_list, chosen_boxes = parallel_detect_and_align(rgb_image, 
                                         detection_md, center_point, target_fs, 
                                         False)
@@ -194,8 +193,10 @@ def main(args, detect_model, embedding_model, classify_model, fa_model, device,
         
         if args.recog_emotion:
             emotions_list = []
-            for i in range(emotions.shape[0]):
-                emotions_list.append(list(emotions[i]))
+            if len(bboxes) > 0 :
+                for i in range(emotions.shape[0]):
+                    emotions_list.append(list(emotions[i]))
+            
             row.append(str(emotions_list))
             df_columns.append('Emotion')
         
