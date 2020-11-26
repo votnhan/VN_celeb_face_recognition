@@ -113,13 +113,15 @@ def convert_id_ds_2_def_structure(root_dir, output_dir, label_file):
     n_images = len(image_paths)
     label_list = []
     for idx, image_path in enumerate(image_paths):
+        if not os.path.isfile(image_path):
+            continue
         print('-----{}/{}-----'.format(idx, n_images))
+        print('Copying file {}'.format(image_path))
         label, image_file = image_path.split('/')[-2: ]
         image_name, ext = image_file.split('.')
         new_image_file = '{}_{}.{}'.format(label, image_name, ext)
         new_img_path = os.path.join(output_dir, new_image_file)
         shutil.copyfile(image_path, new_img_path)
-        print('Copied file {}'.format(image_path))
         label_list.append((new_image_file, int(label)))
 
     label_df = pd.DataFrame(data=label_list, columns=['image', 'label'])

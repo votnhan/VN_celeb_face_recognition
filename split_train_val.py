@@ -14,9 +14,9 @@ def create_file_describe_ds(describe_file, output_file):
         img_for_i = df_label['image'][chosen]
         dict_labels[str(i)] = list(img_for_i)
     
-    write_json(output_file, dict_labels, False)
-    
+    write_json(output_file, dict_labels)
     print('Created {} for describe VN_celeb ...'.format(output_file))
+    return dict_labels
 
 
 def split_train_val(desc_file, output_train, output_val):
@@ -32,6 +32,15 @@ def split_train_val(desc_file, output_train, output_val):
 
     write_json(output_train, dict_train)
     write_json(output_val, dict_val)
+    return dict_train, dict_val
+
+
+def remap_sequence_key(label_dict):
+    remap_dict = {}
+    for idx, key in enumerate(label_dict.keys()):
+        remap_dict[str(idx)] = label_dict[key]
+    return remap_dict
+
 
 if __name__ == "__main__":
     args_parser = argparse.ArgumentParser(description='Split training \
@@ -44,9 +53,23 @@ if __name__ == "__main__":
 
     args_parser.add_argument('-tr', '--train_file', default='train.json')
     args_parser.add_argument('-v', '--val_file', default='val.json')
+    args_parser.add_argument('--remap_key', action='store_true')
 
     args = args_parser.parse_args()
     
-    create_file_describe_ds(args.describe_file, args.out_dict_labels)
-    split_train_val(args.out_dict_labels, args.train_file, args.val_file)
+    dict_labels = create_file_describe_ds(args.describe_file, 
+                    args.out_dict_labels)
+    dict_train, dict_val = split_train_val(args.out_dict_labels, 
+                                args.train_file, args.val_file)
+    
+    if args.remap_key:
+        seq_key_dict_labels = remap_sequence_key(dict_labels)
+        seq_key_dict_train = remap_sequence_key(dict_train)
+        seq_key_dict_val = remap_sequence_key(dict_val)
+        write_json('{}_remap.json'.format(args.describe_file.split('.')[0]), 
+                    seq_key_dict_labels)
+        write_json('{}_remap.json'.format(args.train_file.split('.')[0]), 
+                    seq_key_dict_train)
+        write_json('{}_remap.json'.format(args.val_file.split('.')[0]), 
+                    seq_key_dict_val)       
 

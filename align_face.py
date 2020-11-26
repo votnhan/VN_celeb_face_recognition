@@ -77,17 +77,22 @@ def align_face(input_dir, output_dir, aligned_size, fa_model, center_points,
     input_dir = Path(input_dir)
     output_dir = Path(output_dir)
     for idx, img_file in enumerate(img_files):
-        print('---------{}/{}---------'.format(idx, n_images))
         img_path = str(input_dir / img_file)
-        img = io.imread(img_path)
-        landmarks = fa_model.get_landmarks(img)
+        output_path = str(output_dir / img_file)
+        print('---------{}/{}---------'.format(idx, n_images))
+        if os.path.exists(output_path):
+            continue
+        print('Processing {}'.format(img_path))
+        bgr_image = cv2.imread(img_path)
+        rgb_image = cv2.cvtColor(bgr_image, cv2.COLOR_BGR2RGB)
+        landmarks = fa_model.get_landmarks(rgb_image)
         have_face = False
         if landmarks is None:
             print('Step 1: unknown {}'.format(img_path))
             range_check = list(np.linspace(0.0, 3.0, num=11))
             for sigma in range_check:
                 blur_aug = iaa.GaussianBlur(sigma)
-                image_aug = blur_aug.augment_image(img)
+                image_aug = blur_aug.augment_image(rgb_image)
                 landmarks = fa_model.get_landmarks(image_aug)
                 
                 if landmarks is not None:
@@ -107,7 +112,7 @@ def align_face(input_dir, output_dir, aligned_size, fa_model, center_points,
 
                     if lankmarks_cond:
                         dst = np.array([p1,p2,p3,p4,p5],dtype=np.float32)
-                        face_image_from_landmarks(center_points, dst, img, 
+                        face_image_from_landmarks(center_points, dst, rgb_image, 
                                                     output_dir, img_file, 
                                                     aligned_size)
                         have_face = True
@@ -120,7 +125,7 @@ def align_face(input_dir, output_dir, aligned_size, fa_model, center_points,
             p4 = points[48,:]
             p5 = points[54,:]
             dst = np.array([p1,p2,p3,p4,p5],dtype=np.float32)
-            face_image_from_landmarks(center_points, dst, img, output_dir, 
+            face_image_from_landmarks(center_points, dst, rgb_image, output_dir, 
                                         img_file, aligned_size)
             have_face = True
 
@@ -128,8 +133,7 @@ def align_face(input_dir, output_dir, aligned_size, fa_model, center_points,
             n_no_face += 1
             print('{} has no face'.format(img_path))
             unknown_file.write(img_path + '\n')
-            cv_img = cv2.cvtColor(img, cv2.COLOR_RGB2BGR)
-            face_resized = cv2.resize(cv_img, aligned_size, 
+            face_resized = cv2.resize(bgr_image, aligned_size, 
                                         interpolation=cv2.INTER_CUBIC)
             output_path = str(output_dir / img_file)
             cv2.imwrite(output_path, face_resized)

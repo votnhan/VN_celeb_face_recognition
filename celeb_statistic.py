@@ -9,6 +9,7 @@ import numpy as np
 import face_alignment
 import torch
 import pafy
+import math
 import models as model_md 
 from collections import Counter
 from pathlib import Path
@@ -28,54 +29,81 @@ from data_loader import transforms_default, trans_emotion_inf
 from utils import convert_sec_to_max_time_quantity
 
 
-def export_json_stat(tracker_df, output_js_path, n_video_intervals, n_appear=4, 
-                        unknown_name='Unknown', get_bboxes=False):
+def export_json_stat_dynamic_itv(tracker_df, output_js_path, n_intervals, 
+                        n_appear=4, unknown_name='Unknown'):
+    n_rows = len(tracker_df['Time'])
     interval_counter = 0
     dict_track = {}
-    n_rows = len(tracker_df['Time'])
-    n_rows_in_itv = n_rows // n_video_intervals
-
-    for i in range(n_video_intervals):
+    n_rows_in_itv = n_rows // n_intervals
+    remain_rows = n_rows % n_intervals
+    for i in range(n_intervals):
         interval_counter += 1
         start_range = i*n_rows_in_itv
-        if (i+1)*n_rows_in_itv > n_rows:
-            end_range = n_rows
-        else:
-            end_range = (i+1)*n_rows_in_itv
+        end_range = (i+1)*n_rows_in_itv
+        if i == n_intervals - 1:
+            end_range += remain_rows
         df_for_itv = tracker_df.iloc[start_range: end_range]
-        
-        bboxes_dict = {}
-        zip_obj = zip(df_for_itv['Names'], df_for_itv['Bboxes'], 
-                    df_for_itv['Time'], df_for_itv['Emotion'])
-        for names_str, bboxes_str, time_s, emotions in zip_obj:
-            hms_time = convert_sec_to_max_time_quantity(time_s)
-            list_names = ast.literal_eval(names_str)
-            list_bboxes = ast.literal_eval(bboxes_str)
-            list_emotions = ast.literal_eval(emotions)
-            for name, bbox, emotion in zip(list_names, list_bboxes, list_emotions):
-                bbox_item = {
-                            'time': hms_time,
-                            'bbox': bbox,
-                            'emotions': emotion
-                            }
-                if name not in bboxes_dict:
-                    bboxes_dict[name] = [bbox_item]
-                else:
-                    bboxes_dict[name] += [bbox_item]
-
-        final_bboxes_dict = {}
-        for k, v in bboxes_dict.items():
-            if (k != unknown_name) and (len(v) >= n_appear):
-                final_bboxes_dict[k] = v
-                
-        start_itv = convert_sec_to_max_time_quantity(df_for_itv['Time'].iloc[0])
-        end_itv = convert_sec_to_max_time_quantity(df_for_itv['Time'].iloc[-1])
+        final_bboxes_dict, start_itv, end_itv = find_celeb_infor_in_interval(df_for_itv, 
+                                                    unknown_name, n_appear)
         dict_track[str(interval_counter)] = {
             "interval": (start_itv, end_itv),
             "celebrities": final_bboxes_dict
         }
     
     write_json(output_js_path, dict_track, log=True)
+
+
+def export_json_stat_fixed_itv(tracker_df, output_js_path, n_rows_in_itv, 
+                        n_appear=4, unknown_name='Unknown'):
+    n_rows = len(tracker_df['Time'])
+    interval_counter = 0
+    dict_track = {}
+    n_intervals = math.ceil(n_rows / n_rows_in_itv)
+    for i in range(n_intervals):
+        interval_counter += 1
+        start_range = i*n_rows_in_itv
+        end_range = (i+1)*n_rows_in_itv
+        if end_range > n_rows:
+            end_range = n_rows
+        df_for_itv = tracker_df.iloc[start_range: end_range]
+        final_bboxes_dict, start_itv, end_itv = find_celeb_infor_in_interval(df_for_itv, 
+                                                    unknown_name, n_appear)
+        dict_track[str(interval_counter)] = {
+            "interval": (start_itv, end_itv),
+            "celebrities": final_bboxes_dict
+        }
+    
+    write_json(output_js_path, dict_track, log=True)
+
+
+def find_celeb_infor_in_interval(df_for_itv, unknown_name, n_appear):
+    bboxes_dict = {}
+    zip_obj = zip(df_for_itv['Names'], df_for_itv['Bboxes'], 
+                df_for_itv['Time'], df_for_itv['Emotion'])
+    for names_str, bboxes_str, time_s, emotions in zip_obj:
+        hms_time = convert_sec_to_max_time_quantity(time_s)
+        list_names = ast.literal_eval(names_str)
+        list_bboxes = ast.literal_eval(bboxes_str)
+        list_emotions = ast.literal_eval(emotions)
+        for name, bbox, emotion in zip(list_names, list_bboxes, list_emotions):
+            bbox_item = {
+                        'time': hms_time,
+                        'bbox': bbox,
+                        'emotions': emotion
+                        }
+            if name not in bboxes_dict:
+                bboxes_dict[name] = [bbox_item]
+            else:
+                bboxes_dict[name] += [bbox_item]
+
+    final_bboxes_dict = {}
+    for k, v in bboxes_dict.items():
+        if (k != unknown_name) and (len(v) >= n_appear):
+            final_bboxes_dict[k] = v
+            
+    start_itv = convert_sec_to_max_time_quantity(df_for_itv['Time'].iloc[0])
+    end_itv = convert_sec_to_max_time_quantity(df_for_itv['Time'].iloc[-1])
+    return final_bboxes_dict, start_itv, end_itv
 
 
 def main(args, detect_model, embedding_model, classify_model, fa_model, device, 
@@ -249,7 +277,9 @@ if __name__ == '__main__':
                                 type=str)
     args_parser.add_argument('-nvi', '--n_video_intervals', default=5, type=int)
     args_parser.add_argument('-tap', '--n_time_appear', default=8, type=int)
-
+    args_parser.add_argument('--statistic_mode', default='dynamic_itv', type=str, 
+                                help='dynamic_itv or fixed_itv')
+    args_parser.add_argument('--time_an_interval', default=5, type=int)
     args_parser.add_argument('--inference_method', default='seq_fd_vs_aln', type=str)
     args_parser.add_argument('--min_dim_box', default=50, type=int)
     args_parser.add_argument('--box_ratio', default=2.0, type=float)
@@ -311,6 +341,18 @@ if __name__ == '__main__':
         tracker_df = pd.read_csv(args.output_tracker)
 
     # export JSON file for video celebrity indexing 
-    export_json_stat(tracker_df, args.json_tracker, args.n_video_intervals,
-                        args.n_time_appear, args.ignored_name)
+    print('Statistic mode: {}'.format(args.statistic_mode))
+    if args.statistic_mode == 'dynamic_itv':
+        export_json_stat_dynamic_itv(tracker_df, args.json_tracker, 
+                                        args.n_video_intervals, 
+                                        args.n_time_appear, 
+                                        args.ignored_name)
+    elif args.statistic_mode == 'fixed_itv':
+        n_rows_in_itv = args.time_an_interval * len(frame_idxes) * 60
+        export_json_stat_fixed_itv(tracker_df, args.json_tracker, n_rows_in_itv, 
+                                    args.n_time_appear, args.ignored_name)
+    else:
+        print('This statistic mode {} is not supported !'.format(args.statistic_mode))
+    
+
 

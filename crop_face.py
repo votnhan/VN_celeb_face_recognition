@@ -27,7 +27,11 @@ def crop_face(input_dir, output_dir, detection_md, unknown_file, many_boxes_file
     for idx, img_file in enumerate(img_files):
         total += 1
         print('---------{}/{}---------'.format(idx, n_images))
+        output_path = str(output_dir / img_file)
+        if os.path.exists(output_path):
+            continue
         img_path = str(input_dir / img_file)
+        print('Processing {}'.format(img_path))
         bgr_img = cv2.imread(img_path)
         rgb_img = cv2.cvtColor(bgr_img, cv2.COLOR_BGR2RGB)
         bboxes, _ = detection_md.inference(rgb_img, landmark=False)
@@ -41,7 +45,6 @@ def crop_face(input_dir, output_dir, detection_md, unknown_file, many_boxes_file
             continue
 
         face = get_face_from_box(bgr_img, bboxes[0])
-        output_path = str(output_dir / img_file)
         cv2.imwrite(output_path, face)
         print('Finding face for {} is done ...'.format(img_file))
 
