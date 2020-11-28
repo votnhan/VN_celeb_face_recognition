@@ -136,6 +136,8 @@ def main(args, detect_model, embedding_model, classify_model, fa_model, device,
         if play is None:
             print('This Youtube video did not support mp4 format !')
             return 
+        print('Video resolution: {}, video format: {}'.format(play.resolution, 
+                play.extension))
         video_path = play.url
     else:
         video_path = args.video_path
