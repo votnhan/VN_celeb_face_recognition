@@ -14,7 +14,7 @@ import models as model_md
 from collections import Counter
 from pathlib import Path
 from itertools import groupby
-from utils import read_image, read_json, write_json, load_pickle
+from utils import read_image, read_json, write_json, load_pickle, append_log_to_file
 from demo_image import find_embedding, identify_person, \
                         draw_boxes_on_image, load_model_classify, \
                         get_face_from_boxes, align_face, \
@@ -123,13 +123,28 @@ def main(args, detect_model, embedding_model, classify_model, fa_model, device,
         emt_args = read_json(args.emotion_args)
         emt_model = getattr(model_md, args.emotion)(**emt_args).to(device)
 
+    # Create threshold
     if args.local_thresholds != '':
       print('Using local thresholds !')
       threshold = read_json(args.local_thresholds)
     else:
       print('Using global a threshold !')
       threshold = args.recog_threshold
+
+    # Create tracker file 
+    df_columns = ['Time', 'Names', 'Frame_idx']
+    if args.track_bbox:
+        df_columns.append('Bboxes')
+    if args.recog_emotion:
+        df_columns.append('Emotion')
     
+    # Overwrite old tracker file
+    with open(args.output_tracker, 'w') as tracker_file:
+        tracker_file.write('')
+
+    append_log_to_file(args.output_tracker, df_columns)
+
+    # Index video on Youtube
     if args.youtube_video:
         pafy_obj = pafy.new(args.video_path)
         play = pafy_obj.getbest(preftype="mp4")
@@ -142,16 +157,20 @@ def main(args, detect_model, embedding_model, classify_model, fa_model, device,
     else:
         video_path = args.video_path
     
+    # Data structure for statistic algorithm
     cap = cv2.VideoCapture(video_path)
     count = 0
     processed_frame = 0
     fps = cap.get(cv2.CAP_PROP_FPS)
-    tracker = []
     start_time = time.time()
+    frames_queue, frames_info = [], []
+    end_video = False
+    
+    # Process video !
     while(cap.isOpened()):
         ret, frame = cap.read()
         if not ret:
-            break
+            end_video = True
         
         count += 1
         if_process = False
@@ -160,86 +179,115 @@ def main(args, detect_model, embedding_model, classify_model, fa_model, device,
                 if_process = True
                 break
 
-        if not if_process:
+        if (not if_process) and not end_video:
+            continue
+
+        time_in_video = count / fps
+        if not end_video:
+            frames_queue.append(frame)
+            frames_info.append([time_in_video, count])
+        
+        if (len(frames_queue) !=  args.n_frames) and not end_video:
             continue
         
-        processed_frame += 1
-        time_in_video = count / fps
+        processed_frame += len(frames_queue)
+
         if (processed_frame % args.log_step) == 0:
             hms_time = convert_sec_to_max_time_quantity(time_in_video)
             print('Processing for frame: {}, time: {}'.format(count, 
                         hms_time))
        
-        rgb_image = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
-        recognized_img, names = frame, None
+        rgb_images = []
+        for frame in frames_queue:
+            rgb_image = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
+            rgb_images.append(rgb_image)
+
         if args.inference_method == 'seq_fd_vs_aln':
-            alg_face_list, chosen_boxes = sequential_detect_and_align(rgb_image, 
+            bth_alg_faces, bth_chosen_boxes = sequential_detect_and_align(rgb_images, 
                                             detection_md, center_point, target_fs, 
                                             box_requirements, False)
                 
         elif args.inference_method == 'par_fd_vs_aln':
-            alg_face_list, chosen_boxes = parallel_detect_and_align(rgb_image, 
+            bth_alg_faces, bth_chosen_boxes = parallel_detect_and_align(rgb_images, 
                                         detection_md, center_point, target_fs, 
                                         False)
         else:
             print('Do not support {} method.'.format(args.args.inference_method))
             break
 
-        if len(chosen_boxes) > 0:
-            names = recognize_celeb(alg_face_list, chosen_boxes, device, 
-                        emb_model, classify_model, transforms_default, 
-                            label2name_df, args.recog_threshold)
-            np_image_recog = draw_boxes_on_image(frame, chosen_boxes, names)
 
-            if args.recog_emotion:
-                map_func = np.vectorize(lambda x: idx2etag[x])
-                emotions, probs = recognize_emotion(alg_face_list, device, 
-                                        emt_model, trans_emotion_inf, map_func ,
-                                        args.topk_emotions)
-                np_image_recog = draw_emotions(np_image_recog, chosen_boxes, 
-                                    emotions, probs)
-            recognized_img = np_image_recog
+        bth_names = recognize_celeb(bth_alg_faces, device, emb_model, classify_model, 
+                    transforms_default, label2name_df, args.recog_threshold)
+
+        np_image_recogs = []
+        for idx, names in enumerate(bth_names):
+            if len(names) > 0:
+                img_recog = draw_boxes_on_image(frames_queue[idx], 
+                                bth_chosen_boxes[idx], names)
+            else:
+                img_recog = frames_queue[idx]
+            np_image_recogs.append(img_recog)
+
+        if args.recog_emotion:
+            map_func = np.vectorize(lambda x: idx2etag[x])
+            bth_emotions, bth_probs = recognize_emotion(bth_alg_faces, device, 
+                                    emt_model, trans_emotion_inf, map_func ,
+                                    args.topk_emotions)
+            for idx, (emotions, probs) in enumerate(zip(bth_emotions, bth_probs)):
+                draw_emotions(np_image_recogs[idx], bth_chosen_boxes[idx], 
+                                emotions, probs)
 
         if args.save_frame_recognized:
-            image_name = 'frame_{}.png'.format(count)
-            image_path = os.path.join(args.output_frame, image_name)
-            cv2.imwrite(image_path, recognized_img)
+            for idx, recog_img in enumerate(np_image_recogs):
+                image_name = 'frame_{}.png'.format(frames_info[idx][1])
+                image_path = os.path.join(args.output_frame, image_name)
+                cv2.imwrite(image_path, recog_img)
         
-        if names is None:
-            names = []
-        
-        bboxes = chosen_boxes
-        row = [time_in_video, str(names), count]
-        df_columns = ['Time', 'Names', 'Frame_idx']
-        if args.track_bbox:
-            if bboxes is None:
-                scaled_bboxes = []
-            else:
-                h, w, _ = frame.shape
-                scale = np.array([w, h, w, h])
-                scaled_bboxes = [list(x / scale) for x in bboxes]
-                row.append(str(scaled_bboxes))
-                df_columns.append('Bboxes')
-        
-        if args.recog_emotion:
-            emotions_list = []
-            if len(bboxes) > 0 :
-                for i in range(emotions.shape[0]):
-                    emotions_list.append(list(emotions[i]))
+        logged_rows = []
+        for idx, names in enumerate(bth_names):
+            bboxes = bth_chosen_boxes[idx]
+            row = [str(frames_info[idx][0]), '"' + str(names) + '"', 
+                    str(frames_info[idx][1])]
+            if args.track_bbox:
+                if bboxes is None:
+                    scaled_bboxes = []
+                else:
+                    h, w, _ = frames_queue[idx].shape
+                    scale = np.array([w, h, w, h])
+                    scaled_bboxes = [list(x / scale) for x in bboxes]
+                    row.append('"' + str(scaled_bboxes) + '"')
             
-            row.append(str(emotions_list))
-            df_columns.append('Emotion')
-        
-        tracker.append(row)
-    
+            if args.recog_emotion:
+                emotions = bth_emotions[idx]
+                emotions_list = []
+                if len(bboxes) > 0 :
+                    for i in range(emotions.shape[0]):
+                        emotions_list.append(list(emotions[i]))
+                
+                row.append('"' + str(emotions_list) + '"')
+
+            str_row = ','.join(row) + '\n'
+            logged_rows.append(str_row)
+
+        str_logged_rows = ''.join(logged_rows)
+        with open(args.output_tracker, 'a') as tracker_file:
+            tracker_file.write(str_logged_rows)
+
+        # Destroy queue !
+        frames_queue = []
+        frames_info = []
+
+        # Check end video 
+        if end_video:
+            break
+
     end_time = time.time()
     processed_time = end_time - start_time
     fps_process = int(processed_frame / processed_time)
-    tracked_df = pd.DataFrame(data=tracker, columns=df_columns)
-    tracked_df.to_csv(args.output_tracker, index=False)
     cap.release()
     print('Saved tracker file in {} ...'.format(args.output_tracker))
     print('FPS for recognition face: {}'.format(fps_process))
+    tracked_df = pd.read_csv(args.output_tracker)
     return tracked_df
 
 
@@ -300,6 +348,7 @@ if __name__ == '__main__':
                         default='meta_data/emotion_recognition/etag2idx.pkl.keep', 
                         type=str)
     args_parser.add_argument('--topk_emotions', default=6, type=int)
+    args_parser.add_argument('--n_frames', default=16, type=int)
 
     args = args_parser.parse_args()
 

@@ -47,33 +47,67 @@ def find_emotion(image_tensor, emotion_model, topk=6):
     return np.flip(chosen_idx, axis=1), np.flip(chosen_prob, axis=1)
 
 
-def recognize_celeb(alg_face_list, chosen_boxes, device, emb_model, 
-                        classify_model, transforms, label2name_df, threshold):
+def recognize_celeb(bth_alg_face_list, device, emb_model, classify_model, 
+                        transforms, label2name_df, threshold):
+    alg_face_list = []
+    for x in bth_alg_face_list:
+        alg_face_list += x
+    
     tf_list = []
     for face in alg_face_list:
-        tf_face = transforms_default(face)
+        tf_face = transforms(face)
         tf_list.append(tf_face)
 
-    aligned_faces_tf = torch.stack(tf_list, dim=0)
-    embeddings = find_embedding(aligned_faces_tf.to(device), emb_model)
-    names = identify_person(embeddings, classify_model, label2name_df, 
-                                threshold)
-    return names
+    if len(tf_list) > 0:
+        bth_names = []
+        aligned_faces_tf = torch.stack(tf_list, dim=0)
+        embeddings = find_embedding(aligned_faces_tf.to(device), emb_model)
+        names = identify_person(embeddings, classify_model, label2name_df, 
+                                    threshold)
+        n_faces_4_image = [len(x) for x in bth_alg_face_list]
+        
+        counter = 0
+        for n_face in n_faces_4_image:
+            bth_names.append(names[counter: counter + n_face])
+            counter += n_face
+    else:
+        bth_names = [[] for x in range(len(bth_alg_face_list))]
+    
+    return bth_names
 
 
-def recognize_emotion(alg_face_list, device, emt_model, transforms, 
+def recognize_emotion(bth_alg_face_list, device, emt_model, transforms, 
                         map_label_func, topk=6):
+    alg_face_list = []
+    for x in bth_alg_face_list:
+        alg_face_list += x
+
     emt_tf_list = []
     for face in alg_face_list:
         face_obj = Image.fromarray(face)
         tf_face = transforms(face_obj)
         emt_tf_list.append(tf_face)
 
-    aligned_faces_tf = torch.stack(emt_tf_list, dim=0)
-    emotions_cls, probs = find_emotion(aligned_faces_tf.to(device), 
-                            emt_model, topk)
-    emotions = map_label_func(emotions_cls)
-    return emotions, probs
+    if len(emt_tf_list) > 0:
+        bth_emotions, bth_probs = [], []
+        aligned_faces_tf = torch.stack(emt_tf_list, dim=0)
+        emotions_cls, probs = find_emotion(aligned_faces_tf.to(device), 
+                                emt_model, topk)
+        n_faces_4_image = [len(x) for x in bth_alg_face_list]
+        counter = 0
+        for n_face in n_faces_4_image:
+            if n_face > 0:
+                emotions = map_label_func(emotions_cls[counter: counter + n_face])
+            else:
+                emotions = []
+            bth_emotions.append(emotions)
+            bth_probs.append(probs[counter: counter + n_face])
+            counter += n_face
+    else:
+        bth_emotions = [[] for x in range(len(bth_alg_face_list))]
+        bth_probs = [[] for x in range(len(bth_alg_face_list))]
+    
+    return bth_emotions, bth_probs
 
 
 def identify_person(embeddings, classify_model, name_df, threshold):
@@ -237,33 +271,40 @@ def sequential_detect_and_align(rgb_image, detection_md, center_point, target_fs
         return [], []
     
 
-def parallel_detect_and_align(rgb_image, detection_md, center_point, 
+def parallel_detect_and_align(rgb_images, detection_md, center_point, 
                                 target_fs, log=False):
-    boxes, _, landmarks, = detection_md.inference(rgb_image, landmark=True)
-    if len(boxes) > 0:
-        list_face, face_idx = get_face_from_boxes(rgb_image, boxes)
-        if len(face_idx) > 0:
-            aligned_face_list = []
-            chosen_boxes = [boxes[x] for x in face_idx]
-            chosen_landmarks = [landmarks[x] for x in face_idx]
-            
-            for idx, face in enumerate(list_face):
-                moved_landmark = move_landmark_to_box(chosen_boxes[idx], 
-                                    chosen_landmarks[idx])
-                bgr_face = cv2.cvtColor(face, cv2.COLOR_RGB2BGR)
-                aligned_face = alignment(bgr_face, center_point, moved_landmark, 
-                                    target_fs[0], target_fs[1])
-                aligned_face = cv2.cvtColor(aligned_face, cv2.COLOR_BGR2RGB)
-                aligned_face_list.append(aligned_face)
-            return aligned_face_list, chosen_boxes
+    bth_boxes, _, bth_landmarks, = detection_md.inference(rgb_images, 
+                                        landmark=True)
+    zip_bb_ldm = zip(bth_boxes, bth_landmarks)
+    bth_aligned_faces, bth_chosen_bb = [], []
+    for idx, (boxes, landmarks) in enumerate(zip_bb_ldm):
+        aligned_face_list = []
+        chosen_boxes = []
+        rgb_image = rgb_images[idx]
+        if len(boxes) > 0:
+            list_face, face_idx = get_face_from_boxes(rgb_image, boxes)
+            if len(face_idx) > 0:
+                chosen_boxes = [boxes[x] for x in face_idx]
+                chosen_landmarks = [landmarks[x] for x in face_idx]
+                for idx, face in enumerate(list_face):
+                    moved_landmark = move_landmark_to_box(chosen_boxes[idx], 
+                                        chosen_landmarks[idx])
+                    bgr_face = cv2.cvtColor(face, cv2.COLOR_RGB2BGR)
+                    aligned_face = alignment(bgr_face, center_point, moved_landmark, 
+                                        target_fs[0], target_fs[1])
+                    aligned_face = cv2.cvtColor(aligned_face, cv2.COLOR_BGR2RGB)
+                    aligned_face_list.append(aligned_face)
+            else:
+                if log:
+                    print('Bounding boxes were not qualified or could not detect landmarks !')
         else:
             if log:
-                print('Bounding boxes were not qualified or could not detect landmarks !')
-            return [], []
-    else:
-        if log:
-            print('Face not found in this image !')
-        return [], []
+                print('Face not found in this image !')
+        
+        bth_aligned_faces.append(aligned_face_list) 
+        bth_chosen_bb.append(chosen_boxes)
+
+    return bth_aligned_faces, bth_chosen_bb
 
 if __name__ == '__main__':
     args_parser = argparse.ArgumentParser(description='Face \

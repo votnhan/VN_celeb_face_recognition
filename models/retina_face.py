@@ -151,69 +151,85 @@ class RetinaFace(nn.Module):
             output = (bbox_regressions, F.softmax(classifications, dim=-1), ldm_regressions)
         return output
 
-    def inference(self, rgb_image, landmark=True):
+    def inference(self, rgb_images, landmark=True):
         self.eval()
         self.to(self.device)
 
-        arr_image = np.float32(rgb_image)
-        img_height, img_width, _ = arr_image.shape
+        arr_images = [np.float32(rgb_image) for rgb_image in rgb_images]
+        img_height, img_width, _ = arr_images[0].shape
         scale = torch.Tensor([img_width, img_height, img_width, img_height])
-        arr_image -= self.channels_subtract
-        arr_image = arr_image.transpose(2, 0, 1)
-        tensor_image = torch.from_numpy(arr_image).unsqueeze(0)
-        tensor_image = tensor_image.to(self.device)
+        arr_images = [x - self.channels_subtract for x in arr_images]
+        arr_images = [torch.from_numpy(x.transpose(2, 0, 1)) for x in arr_images]
+        tensor_image = torch.stack(arr_images, dim=0)
+        tensor_image = tensor_image.to(self.device, dtype=torch.float)
         tensor_scale = scale.to(self.device)
         
+        # print(type(tensor_image))
         with torch.no_grad():
-            loc, conf, landms = self.forward(tensor_image)
+            batch_loc, batch_conf, batch_landms = self.forward(tensor_image)
+        
+        # print(loc.size())
         priorbox = PriorBox(self.cfg, image_size=(img_height, img_width))
         priors = priorbox.forward()
         priors = priors.to(self.device)
         prior_data = priors.data
-        boxes = decode(loc.data.squeeze(0), prior_data, self.cfg['variance'])
-        boxes = boxes * tensor_scale 
-        boxes = boxes.cpu().numpy()
-        scores = conf.squeeze(0).data.cpu().numpy()[:, 1]
-        landms = decode_landm(landms.data.squeeze(0), prior_data, self.cfg['variance'])
-        tensor_scale1 = torch.Tensor([img_width, img_height, img_width, img_height,
-                               img_width, img_height, img_width, img_height,
-                               img_width, img_height])
+        ret_dets, ret_scores, ret_landms = [], [], []
+        for i in range(batch_loc.size(0)):
+            loc = batch_loc[i]
+            conf = batch_conf[i]
+            landms = batch_landms[i]
+            boxes = decode(loc.data.squeeze(0), prior_data, self.cfg['variance'])
+            boxes = boxes * tensor_scale 
+            boxes = boxes.cpu().numpy()
+            scores = conf.squeeze(0).data.cpu().numpy()[:, 1]
+            landms = decode_landm(landms.data.squeeze(0), prior_data, self.cfg['variance'])
+            tensor_scale1 = torch.Tensor([img_width, img_height, img_width, img_height,
+                                    img_width, img_height, img_width, img_height,
+                                    img_width, img_height])
 
-        tensor_scale1 = tensor_scale1.to(self.device)
+            tensor_scale1 = tensor_scale1.to(self.device)
 
-        landms = landms * tensor_scale1
-        landms = landms.cpu().numpy()
+            landms = landms * tensor_scale1
+            landms = landms.cpu().numpy()
 
-        # ignore low scores
-        inds = np.where(scores > self.conf_thres)[0]
-        boxes = boxes[inds]
-        landms = landms[inds]
-        scores = scores[inds]
+            # ignore low scores
+            inds = np.where(scores > self.conf_thres)[0]
+            boxes = boxes[inds]
+            landms = landms[inds]
+            scores = scores[inds]
 
-        # keep top-K before NMS
-        order = scores.argsort()[::-1][:self.topk_bf_nms]
-        boxes = boxes[order]
-        landms = landms[order]
-        scores = scores[order]
+            # keep top-K before NMS
+            order = scores.argsort()[::-1][:self.topk_bf_nms]
+            boxes = boxes[order]
+            landms = landms[order]
+            scores = scores[order]
 
-        # do NMS
-        dets = np.hstack((boxes, scores[:, np.newaxis])).astype(np.float32, copy=False)
-        keep = py_cpu_nms(dets, self.nms_thres)
-        dets = dets[keep, :]
-        landms = landms[keep]
+            # do NMS
+            dets = np.hstack((boxes, scores[:, np.newaxis])).astype(np.float32, copy=False)
+            keep = py_cpu_nms(dets, self.nms_thres)
+            dets = dets[keep, :]
+            landms = landms[keep]
 
-        # keep top-K faster NMS
-        dets = dets[:self.keep_top_k, :]
-        landms = landms[:self.keep_top_k, :]
+            # keep top-K faster NMS
+            dets = dets[:self.keep_top_k, :]
+            landms = landms[:self.keep_top_k, :]
 
-        chosen_boxes_idx = dets[:, 4] >= self.vis_thres
-        dets = dets[chosen_boxes_idx, :]
-        landms = landms[chosen_boxes_idx, :]
+            chosen_boxes_idx = dets[:, 4] >= self.vis_thres
+            dets = dets[chosen_boxes_idx, :]
+            landms = landms[chosen_boxes_idx, :]
+
+            if landmark:
+                ret_dets.append(dets[:, :4])
+                ret_scores.append(dets[:, 4])
+                ret_landms.append(landms.reshape(-1, 5, 2))
+            else:
+                ret_dets.append(dets[:, :4])
+                ret_scores.append(dets[:, 4])
 
         if landmark:
-            return dets[:, :4], dets[:, 4], landms.reshape(-1, 5, 2)
+          return ret_dets, ret_scores, ret_landms
 
-        return dets[:, :4], dets[:, 4]
+        return ret_dets, ret_scores
 
     
     def load_model(self, pretrained_path):
