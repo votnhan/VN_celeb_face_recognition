@@ -81,6 +81,7 @@ def find_celeb_infor_in_interval(df_for_itv, unknown_name, n_appear):
     zip_obj = zip(df_for_itv['Names'], df_for_itv['Bboxes'], 
                 df_for_itv['Time'], df_for_itv['Emotion'])
     for names_str, bboxes_str, time_s, emotions in zip_obj:
+        time_s = float(time_s)
         hms_time = convert_sec_to_max_time_quantity(time_s)
         list_names = ast.literal_eval(names_str)
         list_bboxes = ast.literal_eval(bboxes_str)
@@ -101,8 +102,8 @@ def find_celeb_infor_in_interval(df_for_itv, unknown_name, n_appear):
         if (k != unknown_name) and (len(v) >= n_appear):
             final_bboxes_dict[k] = v
             
-    start_itv = convert_sec_to_max_time_quantity(df_for_itv['Time'].iloc[0])
-    end_itv = convert_sec_to_max_time_quantity(df_for_itv['Time'].iloc[-1])
+    start_itv = convert_sec_to_max_time_quantity(float(df_for_itv['Time'].iloc[0]))
+    end_itv = convert_sec_to_max_time_quantity(float(df_for_itv['Time'].iloc[-1]))
     return final_bboxes_dict, start_itv, end_itv
 
 
@@ -118,6 +119,7 @@ def main(args, detect_model, embedding_model, classify_model, fa_model, device,
             'box_ratio': args.box_ratio
         }
 
+    # emotion model (if need)
     if args.recog_emotion:
         idx2etag = load_pickle(args.etag2idx_file)['idx2key']
         emt_args = read_json(args.emotion_args)
@@ -129,7 +131,9 @@ def main(args, detect_model, embedding_model, classify_model, fa_model, device,
       threshold = read_json(args.local_thresholds)
     else:
       print('Using global a threshold !')
-      threshold = args.recog_threshold
+      threshold = {}
+      for i in range(args.num_classes):
+          threshold[str(i)] = args.recog_threshold
 
     # Create tracker file 
     df_columns = ['Time', 'Names', 'Frame_idx']
@@ -217,7 +221,7 @@ def main(args, detect_model, embedding_model, classify_model, fa_model, device,
 
 
         bth_names = recognize_celeb(bth_alg_faces, device, emb_model, classify_model, 
-                    transforms_default, label2name_df, args.recog_threshold)
+                    transforms_default, label2name_df, threshold)
 
         np_image_recogs = []
         for idx, names in enumerate(bth_names):

@@ -9,7 +9,8 @@ import face_alignment
 import torch
 import models as model_md 
 from pathlib import Path
-from utils import read_image, read_json, load_pickle
+from utils import read_image, read_json, load_pickle, \
+                    convert_sec_to_max_time_quantity, append_log_to_file
 from demo_image import  draw_boxes_on_image, load_model_classify, \
                         get_face_from_boxes, align_face, \
                         move_landmark_to_box, recognize_celeb, \
@@ -55,71 +56,144 @@ def main(args, detect_model, embedding_model, classify_model, fa_model, device,
             'box_ratio': args.box_ratio
         }
     
+    
+    # emotion model (if need)
     if args.recog_emotion:
         idx2etag = load_pickle(args.etag2idx_file)['idx2key']
         emt_args = read_json(args.emotion_args)
         emt_model = getattr(model_md, args.emotion)(**emt_args).to(device)
+
+    # Create tracker file 
+    df_columns = ['Time', 'Names', 'Frame_idx', 'Bboxes']
+    if args.recog_emotion:
+        df_columns.append('Emotion')
+
+    # Overwrite old tracker file
+    with open(args.output_tracker, 'w') as tracker_file:
+        tracker_file.write('')
+
+    append_log_to_file(args.output_tracker, df_columns)    
     
+    # Data structure for statistic algorithm
     cap = cv2.VideoCapture(args.video_path)
     count = 0
+    processed_frame = 0
     fps = cap.get(cv2.CAP_PROP_FPS)
-    tracker = []
     start_time = time.time()
+    frames_queue, frames_info = [], []
+    end_video = False
+
     while(cap.isOpened()):
         ret, frame = cap.read()
         if not ret:
-            break
+            end_video = True
+            
         count += 1
         time_in_video = count / fps
-        print('Processing for frame: {}, time: {:.2f} s'.format(count, 
-                    time_in_video))
-        rgb_image = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
+        if not end_video:
+            frames_queue.append(frame)
+            frames_info.append([time_in_video, count])
+
+        if (len(frames_queue) !=  args.n_frames) and not end_video:
+            continue
+
+        processed_frame += len(frames_queue)
+
+        if (processed_frame % args.log_step) == 0:
+            hms_time = convert_sec_to_max_time_quantity(time_in_video)
+            print('Processing for frame: {}, time: {}'.format(count, 
+                        hms_time))
+        
+        rgb_images = []
+        for frame in frames_queue:
+            rgb_image = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
+            rgb_images.append(rgb_image)
+        
         if args.inference_method == 'seq_fd_vs_aln':
-            recognized_img, names = frame, None
-            alg_face_list, chosen_boxes = sequential_detect_and_align(rgb_image, 
+            bth_alg_faces, bth_chosen_boxes = sequential_detect_and_align(rgb_images, 
                                             detection_md, center_point, 
                                             target_fs, box_requirements,False)
     
         elif args.inference_method == 'par_fd_vs_aln':
-            recognized_img, names = frame, None
-            alg_face_list, chosen_boxes = parallel_detect_and_align(rgb_image, 
+            bth_alg_faces, bth_chosen_boxes = parallel_detect_and_align(rgb_images, 
                                         detection_md, center_point, target_fs, 
                                         False)
         else:
             print('Do not support {} method.'.format(args.args.inference_method))
             break
 
-        if len(chosen_boxes) > 0:
-            names = recognize_celeb(alg_face_list, chosen_boxes, device, 
-                                    emb_model, classify_model, 
-                                    transforms_default, 
-                                    label2name_df, args.recog_threshold)
-            np_image_recog = draw_boxes_on_image(frame, chosen_boxes, names)
 
-            if args.recog_emotion:
-                map_func = np.vectorize(lambda x: idx2etag[x])
-                emotions, probs = recognize_emotion(alg_face_list, device, 
-                                        emt_model, trans_emotion_inf, map_func, 
-                                        args.topk_emotions)
-                np_image_recog = draw_emotions(np_image_recog, chosen_boxes, 
-                                    emotions, probs)
-            recognized_img = np_image_recog
+        bth_names = recognize_celeb(bth_alg_faces, device, 
+                                emb_model, classify_model, 
+                                transforms_default, 
+                                label2name_df, args.recog_threshold)
+
+        np_image_recogs = []
+        for idx, names in enumerate(bth_names):
+            if len(names) > 0:
+                img_recog = draw_boxes_on_image(frames_queue[idx], 
+                                bth_chosen_boxes[idx], names)
+            else:
+                img_recog = frames_queue[idx]
+            np_image_recogs.append(img_recog)
+
+        if args.recog_emotion:
+            map_func = np.vectorize(lambda x: idx2etag[x])
+            bth_emotions, bth_probs = recognize_emotion(bth_alg_faces, device, 
+                                    emt_model, trans_emotion_inf, map_func ,
+                                    args.topk_emotions)
+            for idx, (emotions, probs) in enumerate(zip(bth_emotions, bth_probs)):
+                draw_emotions(np_image_recogs[idx], bth_chosen_boxes[idx], 
+                                emotions, probs)
 
         if args.save_frame_recognized != '':
-            image_name = 'frame_{}.png'.format(count)
-            image_path = os.path.join(args.output_frame, image_name)
-            cv2.imwrite(image_path, recognized_img)
-        
-        if names is None:
-            names = []
-        
-        tracker.append((time_in_video, str(names)))
-    
+            for idx, recog_img in enumerate(np_image_recogs):
+                image_name = 'frame_{}.png'.format(frames_info[idx][1])
+                image_path = os.path.join(args.output_frame, image_name)
+                cv2.imwrite(image_path, recog_img)
+
+        logged_rows = []
+        for idx, names in enumerate(bth_names):
+            bboxes = bth_chosen_boxes[idx]
+            row = [str(frames_info[idx][0]), '"' + str(names) + '"', 
+                    str(frames_info[idx][1])]
+
+            if len(bboxes) == 0:
+                scaled_bboxes = []
+            else:
+                h, w, _ = frames_queue[idx].shape
+                scale = np.array([w, h, w, h])
+                scaled_bboxes = [list(x / scale) for x in bboxes]
+            
+            row.append('"' + str(scaled_bboxes) + '"')
+            
+            if args.recog_emotion:
+                emotions = bth_emotions[idx]
+                emotions_list = []
+                if len(bboxes) > 0 :
+                    for i in range(emotions.shape[0]):
+                        emotions_list.append(list(emotions[i]))
+                
+                row.append('"' + str(emotions_list) + '"')
+
+            str_row = ','.join(row) + '\n'
+            logged_rows.append(str_row)
+
+        str_logged_rows = ''.join(logged_rows)
+        with open(args.output_tracker, 'a') as tracker_file:
+            tracker_file.write(str_logged_rows)
+
+        # Destroy queue !
+        frames_queue = []
+        frames_info = []
+
+        # Check end video 
+        if end_video:
+            break        
+
     end_time = time.time()
     processed_time = end_time - start_time
-    fps_process = int(count / processed_time)
-    tracked_df = pd.DataFrame(data=tracker, columns=['Time', 'Names'])
-    tracked_df.to_csv(args.output_tracker, index=False)
+    fps_process = int(processed_frame / processed_time)
     cap.release()
     print('Saved tracker file in {} ...'.format(args.output_tracker))
     print('FPS for recognition face: {}'.format(fps_process))
@@ -147,8 +221,7 @@ if __name__ == '__main__':
     args_parser.add_argument('-nc', '--num_classes', default=1001, type=int)
     args_parser.add_argument('-ov', '--output_video', default='', type=str)
     args_parser.add_argument('-fps', '--fps_video', default=25.0, type=float)
-    args_parser.add_argument('-sfr', '--save_frame_recognized', default='', 
-                                    type=str)
+    args_parser.add_argument('-sfr', '--save_frame_recognized', action='store_true')
     args_parser.add_argument('-det', '--detection', default='MTCNN', type=str)
     args_parser.add_argument('-enc', '--encoder', default='InceptionResnetV1', 
                                 type=str)
@@ -160,6 +233,7 @@ if __name__ == '__main__':
     args_parser.add_argument('--inference_method', default='seq_fd_vs_aln', type=str)
     args_parser.add_argument('--min_dim_box', default=50, type=int)
     args_parser.add_argument('--box_ratio', default=2.0, type=float)
+    args_parser.add_argument('--log_step', default=100, type=int)
     args_parser.add_argument('--recog_threshold', default=0.0, type=float)
     args_parser.add_argument('--recog_emotion', action='store_true')
     args_parser.add_argument('-emt', '--emotion', default='resnet_2branch_50', 
@@ -171,6 +245,7 @@ if __name__ == '__main__':
                         default='meta_data/emotion_recognition/etag2idx.pkl.keep', 
                         type=str)
     args_parser.add_argument('--topk_emotions', default=6, type=int)
+    args_parser.add_argument('--n_frames', default=16, type=int)
 
     args = args_parser.parse_args()
 
@@ -199,11 +274,6 @@ if __name__ == '__main__':
     load_model_classify(args.classify_model, classify_model)
     classify_model = classify_model.to(device)
 
-    # emotion model (if need)
-    emt_model = None
-    if args.recog_emotion:
-        emt_args = read_json(args.emotion_args)
-        emt_model = getattr(model_md, args.emotion)(**emt_args).to(device)
 
     # center point, face size after alignment
     target_fs = (args.target_face_size, args.target_face_size)
