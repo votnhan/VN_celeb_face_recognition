@@ -119,6 +119,7 @@ def main(args, detect_model, embedding_model, classify_model, fa_model, device,
             'box_ratio': args.box_ratio
         }
 
+    # emotion model (if need)
     if args.recog_emotion:
         idx2etag = load_pickle(args.etag2idx_file)['idx2key']
         emt_args = read_json(args.emotion_args)
@@ -130,7 +131,9 @@ def main(args, detect_model, embedding_model, classify_model, fa_model, device,
       threshold = read_json(args.local_thresholds)
     else:
       print('Using global a threshold !')
-      threshold = args.recog_threshold
+      threshold = {}
+      for i in range(args.num_classes):
+          threshold[str(i)] = args.recog_threshold
 
     # Create tracker file 
     df_columns = ['Time', 'Names', 'Frame_idx']
@@ -218,7 +221,7 @@ def main(args, detect_model, embedding_model, classify_model, fa_model, device,
 
 
         bth_names = recognize_celeb(bth_alg_faces, device, emb_model, classify_model, 
-                    transforms_default, label2name_df, args.recog_threshold)
+                    transforms_default, label2name_df, threshold)
 
         np_image_recogs = []
         for idx, names in enumerate(bth_names):

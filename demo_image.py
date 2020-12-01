@@ -116,12 +116,11 @@ def identify_person(embeddings, classify_model, name_df, threshold):
         output = classify_model(embeddings)
     n_classes = output.size(1)
     if type(threshold) is float:
-      threshold_dict = {}
-      for i in range(n_classes):
-        threshold_dict[str(i)] = threshold
+        threshold_dict = {}
+        for i in range(n_classes):
+            threshold_dict[str(i)] = threshold
     else:
-      
-      threshold_dict = threshold
+        threshold_dict = threshold
 
     preditions = torch.argmax(output, dim=1)
     preditions_np = preditions.detach().cpu().numpy()
@@ -388,35 +387,39 @@ if __name__ == '__main__':
     # Do face recognition process
     np_image = cv2.imread(args.image_path)
     rgb_image = cv2.cvtColor(np_image, cv2.COLOR_BGR2RGB)
+    rgb_images = [rgb_image]
 
     if args.inference_method == 'seq_fd_vs_aln':
         box_requirements = {
             'min_dim': args.min_dim_box,
             'box_ratio': args.box_ratio
         }
-        alg_face_list, chosen_boxes = sequential_detect_and_align(rgb_image, 
+        bth_alg_faces, bth_chosen_boxes = sequential_detect_and_align(rgb_images, 
                                         detection_md, center_point, target_fs, 
                                         box_requirements, True)
     elif args.inference_method == 'par_fd_vs_aln':
-        alg_face_list, chosen_boxes = parallel_detect_and_align(rgb_image, 
+        bth_alg_faces, bth_chosen_boxes = parallel_detect_and_align(rgb_images, 
                                         detection_md, center_point, target_fs,
                                          True)
     else:
         print('Do not support {} method.'.format(args.args.inference_method))
     
-    if len(chosen_boxes) > 0:
-        names = recognize_celeb(alg_face_list, chosen_boxes, device, 
-                    emb_model, classify_model, transforms_default, 
-                        label2name_df, args.recog_threshold)
-        np_image_recog = draw_boxes_on_image(np_image, chosen_boxes, names)
 
-        if args.recog_emotion:
-            map_func = np.vectorize(lambda x: idx2etag[x])
-            emotions, probs = recognize_emotion(alg_face_list, device, 
-                                    emt_model, trans_emotion_inf, map_func, 
-                                    args.topk_emotions)
-            np_image_recog = draw_emotions(np_image_recog, chosen_boxes, 
-                                emotions, probs)
-        
-        cv2.imwrite(args.output_path, np_image_recog)
-        print('Face recognized image saved at {} ...'.format(args.output_path))
+    bth_names = recognize_celeb(bth_alg_faces, device, emb_model, 
+                classify_model, transforms_default, label2name_df, 
+                    args.recog_threshold)
+
+    names = bth_names[0]
+    chosen_boxes = bth_chosen_boxes[0]
+    np_image_recog = draw_boxes_on_image(np_image, chosen_boxes, names)
+
+    if args.recog_emotion:
+        map_func = np.vectorize(lambda x: idx2etag[x])
+        bth_emotions, bth_probs = recognize_emotion(bth_alg_faces, device, 
+                                emt_model, trans_emotion_inf, map_func, 
+                                args.topk_emotions)
+        np_image_recog = draw_emotions(np_image_recog, chosen_boxes, 
+                            bth_emotions[0], bth_probs[0])
+    
+    cv2.imwrite(args.output_path, np_image_recog)
+    print('Face recognized image saved at {} ...'.format(args.output_path))

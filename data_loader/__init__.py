@@ -72,8 +72,9 @@ transforms_rank1_VNceleb_aug = tf.Compose([
 
 
 trans_emotion_inf = tf.Compose([
-  tf.Resize(256),
-  tf.CenterCrop(224),
+  # tf.Resize(256),
+  # tf.CenterCrop(224),
+  tf.Resize(224),
   tf.ToTensor(),
   tf.Normalize(mean=[0.485, 0.456, 0.406],
                     std=[0.229, 0.224, 0.225])
