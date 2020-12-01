@@ -14,7 +14,10 @@ import models as model_md
 from collections import Counter
 from pathlib import Path
 from itertools import groupby
-from utils import read_image, read_json, write_json, load_pickle, append_log_to_file
+from s3_utils import client as s3_client
+from s3_utils import upload_file
+from utils import read_image, read_json, write_json, load_pickle, append_log_to_file, \
+                    generate_url_video
 from demo_image import find_embedding, identify_person, \
                         draw_boxes_on_image, load_model_classify, \
                         get_face_from_boxes, align_face, \
@@ -29,8 +32,8 @@ from data_loader import transforms_default, trans_emotion_inf
 from utils import convert_sec_to_max_time_quantity
 
 
-def export_json_stat_dynamic_itv(tracker_df, output_js_path, n_intervals, 
-                        n_appear=4, unknown_name='Unknown'):
+def export_json_stat_dynamic_itv(tracker_df, n_intervals, n_appear=4, 
+                                    unknown_name='Unknown'):
     n_rows = len(tracker_df['Time'])
     interval_counter = 0
     dict_track = {}
@@ -49,12 +52,12 @@ def export_json_stat_dynamic_itv(tracker_df, output_js_path, n_intervals,
             "interval": (start_itv, end_itv),
             "celebrities": final_bboxes_dict
         }
+
+    return dict_track
     
-    write_json(output_js_path, dict_track, log=True)
 
-
-def export_json_stat_fixed_itv(tracker_df, output_js_path, n_rows_in_itv, 
-                        n_appear=4, unknown_name='Unknown'):
+def export_json_stat_fixed_itv(tracker_df, n_rows_in_itv, n_appear=4, 
+                                    unknown_name='Unknown'):
     n_rows = len(tracker_df['Time'])
     interval_counter = 0
     dict_track = {}
@@ -72,9 +75,9 @@ def export_json_stat_fixed_itv(tracker_df, output_js_path, n_rows_in_itv,
             "interval": (start_itv, end_itv),
             "celebrities": final_bboxes_dict
         }
-    
-    write_json(output_js_path, dict_track, log=True)
 
+    return dict_track
+    
 
 def find_celeb_infor_in_interval(df_for_itv, unknown_name, n_appear):
     bboxes_dict = {}
@@ -148,18 +151,8 @@ def main(args, detect_model, embedding_model, classify_model, fa_model, device,
 
     append_log_to_file(args.output_tracker, df_columns)
 
-    # Index video on Youtube
-    if args.youtube_video:
-        pafy_obj = pafy.new(args.video_path)
-        play = pafy_obj.getbest(preftype="mp4")
-        if play is None:
-            print('This Youtube video did not support mp4 format !')
-            return 
-        print('Video resolution: {}, video format: {}'.format(play.resolution, 
-                play.extension))
-        video_path = play.url
-    else:
-        video_path = args.video_path
+    # Get http url video
+    video_path = generate_url_video(args, s3_client)
     
     # Data structure for statistic algorithm
     cap = cv2.VideoCapture(video_path)
@@ -342,6 +335,7 @@ if __name__ == '__main__':
     args_parser.add_argument('--local_thresholds', default='', type=str)
     args_parser.add_argument('--track_bbox', action='store_true')
     args_parser.add_argument('--youtube_video', action='store_true')
+    args_parser.add_argument('--youtube_link', default='', type=str)
     args_parser.add_argument('--recog_emotion', action='store_true')
     args_parser.add_argument('-emt', '--emotion', default='resnet_2branch_50', 
                                 type=str)
@@ -353,6 +347,8 @@ if __name__ == '__main__':
                         type=str)
     args_parser.add_argument('--topk_emotions', default=6, type=int)
     args_parser.add_argument('--n_frames', default=16, type=int)
+    args_parser.add_argument('--s3_video', action='store_true')
+    args_parser.add_argument('--s3_video_infor', default='', type=str)
 
     args = args_parser.parse_args()
 
@@ -397,17 +393,21 @@ if __name__ == '__main__':
 
     # export JSON file for video celebrity indexing 
     print('Statistic mode: {}'.format(args.statistic_mode))
+    dict_track = {}
     if args.statistic_mode == 'dynamic_itv':
-        export_json_stat_dynamic_itv(tracker_df, args.json_tracker, 
-                                        args.n_video_intervals, 
-                                        args.n_time_appear, 
-                                        args.ignored_name)
+        dict_track = export_json_stat_dynamic_itv(tracker_df, args.n_video_intervals, 
+                            args.n_time_appear, args.ignored_name)
     elif args.statistic_mode == 'fixed_itv':
         n_rows_in_itv = args.time_an_interval * len(frame_idxes) * 60
-        export_json_stat_fixed_itv(tracker_df, args.json_tracker, n_rows_in_itv, 
-                                    args.n_time_appear, args.ignored_name)
+        dict_track = export_json_stat_fixed_itv(tracker_df, n_rows_in_itv, 
+                            args.n_time_appear, args.ignored_name)
     else:
         print('This statistic mode {} is not supported !'.format(args.statistic_mode))
     
-
+    write_json(args.json_tracker, dict_track, log=True)
+    
+    if args.s3_video:
+        s3_video_infor = read_json(args.s3_video_infor)
+        upload_file(s3_client, s3_video_infor['bucket'], args.json_tracker, 
+                        args.json_tracker, log=True)
 
