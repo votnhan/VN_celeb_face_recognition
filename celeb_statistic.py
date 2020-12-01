@@ -81,6 +81,7 @@ def find_celeb_infor_in_interval(df_for_itv, unknown_name, n_appear):
     zip_obj = zip(df_for_itv['Names'], df_for_itv['Bboxes'], 
                 df_for_itv['Time'], df_for_itv['Emotion'])
     for names_str, bboxes_str, time_s, emotions in zip_obj:
+        time_s = float(time_s)
         hms_time = convert_sec_to_max_time_quantity(time_s)
         list_names = ast.literal_eval(names_str)
         list_bboxes = ast.literal_eval(bboxes_str)
@@ -101,8 +102,8 @@ def find_celeb_infor_in_interval(df_for_itv, unknown_name, n_appear):
         if (k != unknown_name) and (len(v) >= n_appear):
             final_bboxes_dict[k] = v
             
-    start_itv = convert_sec_to_max_time_quantity(df_for_itv['Time'].iloc[0])
-    end_itv = convert_sec_to_max_time_quantity(df_for_itv['Time'].iloc[-1])
+    start_itv = convert_sec_to_max_time_quantity(float(df_for_itv['Time'].iloc[0]))
+    end_itv = convert_sec_to_max_time_quantity(float(df_for_itv['Time'].iloc[-1]))
     return final_bboxes_dict, start_itv, end_itv
 
 
@@ -391,6 +392,7 @@ if __name__ == '__main__':
         print('Re-use tracker file {}'.format(args.output_tracker))
         tracker_df = pd.read_csv(args.output_tracker)
 
+
     # export JSON file for video celebrity indexing 
     print('Statistic mode: {}'.format(args.statistic_mode))
     if args.statistic_mode == 'dynamic_itv':
@@ -405,5 +407,3 @@ if __name__ == '__main__':
     else:
         print('This statistic mode {} is not supported !'.format(args.statistic_mode))
     
-
-

@@ -1,8 +1,8 @@
 {
     "backbone_cfg": "cfg_mnet",
     "phase": "test",
-    "backbone_path": "/content/Retinaface_model_v2/mobilenetV1X0.25_pretrain.tar",
-    "checkpoint_path": "/content/Retinaface_model_v2/mobilenet0.25_Final.pth",
+    "backbone_path": "../weights/face_recognition/Retinaface_model_v2/mobilenetV1X0.25_pretrain.tar",
+    "checkpoint_path": "../weights/face_recognition/Retinaface_model_v2/mobilenet0.25_Final.pth",
     "device": "cuda:0",
     "conf_thres": 0.02,
     "topk_bf_nms": 5000,

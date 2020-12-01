@@ -164,11 +164,9 @@ class RetinaFace(nn.Module):
         tensor_image = tensor_image.to(self.device, dtype=torch.float)
         tensor_scale = scale.to(self.device)
         
-        # print(type(tensor_image))
         with torch.no_grad():
             batch_loc, batch_conf, batch_landms = self.forward(tensor_image)
         
-        # print(loc.size())
         priorbox = PriorBox(self.cfg, image_size=(img_height, img_width))
         priors = priorbox.forward()
         priors = priors.to(self.device)

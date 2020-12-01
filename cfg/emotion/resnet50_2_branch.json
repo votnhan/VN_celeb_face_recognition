@@ -1,5 +1,5 @@
 {
     "pretrained": false,
     "num_classes": 690,
-    "checkpoint_path": null
+    "checkpoint_path": "../weights/face_recognition/model_best.pth.tar"
 }

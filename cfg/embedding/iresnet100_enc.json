@@ -2,5 +2,5 @@
     "pretrained": true,
     "progress": true,
     "freeze_weights": false,
-    "checkpoint_path":""
+    "checkpoint_path":"../weights/face_recognition/checkpoint-epoch23.pth"
 }
