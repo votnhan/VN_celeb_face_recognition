@@ -239,8 +239,8 @@ def move_landmark_to_box(box, landmark):
     return moved_landmark
     
 
-def sequential_detect_and_align(rgb_image, detection_md, center_point, target_fs, 
-                                    box_requirements=None, log=False):
+def sequential_detect_and_align(rgb_image, detection_md, fa_model, center_point, 
+                                    target_fs, box_requirements=None, log=False):
     boxes, _,  = detection_md.inference(rgb_image, landmark=False)
     if len(boxes) > 0:
         list_face, face_idx = get_face_from_boxes(rgb_image, boxes, box_requirements)
@@ -393,7 +393,7 @@ if __name__ == '__main__':
             'box_ratio': args.box_ratio
         }
         bth_alg_faces, bth_chosen_boxes = sequential_detect_and_align(rgb_images, 
-                                        detection_md, center_point, target_fs, 
+                                        detection_md, fa_model, center_point, target_fs, 
                                         box_requirements, True)
     elif args.inference_method == 'par_fd_vs_aln':
         bth_alg_faces, bth_chosen_boxes = parallel_detect_and_align(rgb_images, 
