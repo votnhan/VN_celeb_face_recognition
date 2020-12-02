@@ -25,3 +25,15 @@ def download_file(client, bucket, file_path, file_on_s3, log=False):
         print('Downloaded file {} to path {} ...'.format(file_on_s3, file_path)) 
 
     return True
+
+
+def write_file(client, bucket, str_data, file_on_s3, log=True):
+    try:
+        client.put_object(Body=str_data, Bucket=bucket, Key=file_on_s3)
+    except ClientError as ex:
+        if log:
+            print(ex)
+        return False
+    if log:
+        print('Wrote file {} to s3 ...'.format(file_on_s3))
+    return True

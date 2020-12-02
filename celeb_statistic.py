@@ -4,6 +4,7 @@ import argparse
 import glob
 import time
 import ast
+import json
 import pandas as pd
 import numpy as np
 import face_alignment
@@ -15,7 +16,7 @@ from collections import Counter
 from pathlib import Path
 from itertools import groupby
 from s3_utils import client as s3_client
-from s3_utils import upload_file
+from s3_utils import write_file
 from utils import read_image, read_json, write_json, load_pickle, append_log_to_file, \
                     generate_url_video
 from demo_image import find_embedding, identify_person, \
@@ -303,7 +304,7 @@ if __name__ == '__main__':
                                 type=str)
     args_parser.add_argument('-l2n', '--label2name', default='label2name.csv', 
                                 type=str)
-    args_parser.add_argument('-dv', '--device', default='GPU', type=str) 
+    args_parser.add_argument('-dv', '--device', default='cuda:0', type=str) 
     args_parser.add_argument('-id', '--input_dim_emb', default=512, type=int) 
     args_parser.add_argument('-nc', '--num_classes', default=1001, type=int)
     args_parser.add_argument('-sfr', '--save_frame_recognized', 
@@ -352,9 +353,7 @@ if __name__ == '__main__':
 
     args = args_parser.parse_args()
 
-    device = 'cpu'
-    if args.device == 'GPU':
-        device = 'cuda:0'
+    device = args.device
 
     # Prepare 3 models, database for label to name
     label2name_df = pd.read_csv(args.label2name)
@@ -404,10 +403,11 @@ if __name__ == '__main__':
     else:
         print('This statistic mode {} is not supported !'.format(args.statistic_mode))
     
-    write_json(args.json_tracker, dict_track, log=True)
-    
     if args.s3_video:
         s3_video_infor = read_json(args.s3_video_infor)
-        upload_file(s3_client, s3_video_infor['bucket'], args.json_tracker, 
-                        args.json_tracker, log=True)
+        json_str = json.dumps(dict_track, indent=True)
+        write_file(s3_client, s3_video_infor['bucket'], json_str, args.json_tracker, 
+                    log=True)
+    else:
+        write_json(args.json_tracker, dict_track, log=True)
 

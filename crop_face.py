@@ -3,6 +3,7 @@ import os
 import glob
 import models as model_md
 import cv2
+import pandas as pd
 from utils import read_json
 from pathlib import Path
 
@@ -17,13 +18,15 @@ def get_face_from_box(bgr_img, box):
     return face
 
 
-def crop_face(input_dir, output_dir, detection_md, unknown_file, many_boxes_file):
+def crop_face(input_dir, output_dir, detection_md, unknown_file, many_boxes_file, 
+                label_file):
     n_no_face, many_boxes, total = 0, 0, 0
     img_files = os.listdir(input_dir)
     img_files.sort()
     n_images = len(img_files)
     input_dir = Path(input_dir)
     output_dir = Path(output_dir)
+    label_list = []
     for idx, img_file in enumerate(img_files):
         total += 1
         print('---------{}/{}---------'.format(idx, n_images))
@@ -47,6 +50,12 @@ def crop_face(input_dir, output_dir, detection_md, unknown_file, many_boxes_file
         face = get_face_from_box(bgr_img, bboxes[0])
         cv2.imwrite(output_path, face)
         print('Finding face for {} is done ...'.format(img_file))
+        label = img_file.split('_')[0]
+        label_list.append((img_file, int(label)))
+
+    label_df = pd.DataFrame(data=label_list, columns=['image', 'label'])
+    label_df.to_csv(label_file, index=False)
+    print('Saved label file {}.'.format(label_file))
 
     print('Total images: {}.'.format(total))
     print('No face images: {}.'.format(n_no_face))
@@ -67,6 +76,7 @@ if __name__ == '__main__':
     args_parser.add_argument('-det', '--detection', default='MTCNN', type=str)
     args_parser.add_argument('-dargs', '--detection_args', 
                                 default='cfg/detection/mtcnn.json', type=str)
+    args_parser.add_argument('--label_file', default='VN_celeb.csv', type=str)
     
     args = args_parser.parse_args()
     if not os.path.exists(args.output_dir):
@@ -80,6 +90,7 @@ if __name__ == '__main__':
     unknown_file = open(args.un_face_file, 'w')
     many_boxes_file = open(args.many_boxes_file, 'w')
 
-    crop_face(args.input_dir, args.output_dir, detection_md, unknown_file, many_boxes_file)
+    crop_face(args.input_dir, args.output_dir, detection_md, unknown_file, 
+                many_boxes_file, args.label_file)
     unknown_file.close()
     many_boxes_file.close()

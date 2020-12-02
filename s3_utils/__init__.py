@@ -1,7 +1,7 @@
 import boto3
 import os
 from dotenv import load_dotenv
-from .s3_transfer_file import upload_file, download_file
+from .s3_transfer_file import upload_file, download_file, write_file
 from .url_generator import s3_url_generator
 
 
