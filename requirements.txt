@@ -1,0 +1,5 @@
+pafy
+face_alignment
+youtube_dl
+boto3
+python-dotenv

@@ -144,6 +144,9 @@ class BaseTrainer():
             for key, value in log.items():
                 self.logger.info('    {:15s}: {}'.format(str(key), value))
 
+            if epoch % self.save_step == 0:
+                self.save_checkpoint(epoch, save_best=best)
+
             # save checkpoint with the best result on configured metric
             best = False
             tracked_metric = log.get(self.tracked_metric)
@@ -166,9 +169,6 @@ class BaseTrainer():
                 self.logger.info("Validation performance didn\'t improve for {} epochs. "
                                     "Training stops.".format(self.early_stop))
                 break
-
-            if epoch % self.save_step == 0:
-                self.save_checkpoint(epoch, save_best=best)
 
             if isinstance(self.lr_scheduler, MultiStepLR):
                 self.lr_scheduler.step()

@@ -107,13 +107,14 @@ def convert_ds_folder_2_def_structure(root_dir, output_dir, label_file):
     print('Saved label file {}.'.format(label_file))
 
 
-def convert_id_ds_2_def_structure(root_dir, output_dir):
+def convert_id_ds_2_def_structure(root_dir, output_dir, wrong_format):
     if not os.path.exists(output_dir):
         os.makedirs(output_dir)
 
     path_str = root_dir + '/*/*'
     image_paths = glob.glob(path_str)
     n_images = len(image_paths)
+    wrong_format_counter = 0
     for idx, image_path in enumerate(image_paths):
         if not os.path.isfile(image_path):
             continue
@@ -121,11 +122,15 @@ def convert_id_ds_2_def_structure(root_dir, output_dir):
         print('Copying file {}'.format(image_path))
         label, image_file = image_path.split('/')[-2: ]
         image_name, ext = image_file.split('.')
-        if ext not in ['png', 'jpg']:
+        if ext not in ['png', 'jpg', 'jpeg']:
+            wrong_format.write(image_path + '\n')
+            wrong_format_counter += 1
             continue
         new_image_file = '{}_{}.{}'.format(label, image_name, ext)
         new_img_path = os.path.join(output_dir, new_image_file)
         shutil.copyfile(image_path, new_img_path)
+
+    print('Samples wrong format: {}'.format(wrong_format_counter))
 
 
 def load_pickle(save_file):

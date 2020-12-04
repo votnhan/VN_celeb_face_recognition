@@ -95,6 +95,7 @@ def crop_face_dataset(input_dir, output_dir, detection_md, unknown_file,
         if n_faces >  1:
             many_boxes_file.write(img_path + '\n')
             many_boxes += 1
+            continue
         elif n_faces < 1:
             unknown_file.write(img_path + '\n')
             n_no_face += 1
