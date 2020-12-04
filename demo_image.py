@@ -1,5 +1,6 @@
 from utils import read_image, read_json, load_pickle
 from PIL import Image
+from collections import Counter
 from align_face import alignment, center_point_dict
 from data_loader import transforms_default, trans_emotion_inf
 from imgaug import augmenters as iaa
@@ -47,7 +48,7 @@ def find_emotion(image_tensor, emotion_model, topk=6):
     return np.flip(chosen_idx, axis=1), np.flip(chosen_prob, axis=1)
 
 
-def recognize_celeb(bth_alg_face_list, device, emb_model, classify_model, 
+def recognize_celeb(bth_alg_face_list, device, emb_model, classify_models, 
                         transforms, label2name_df, threshold):
     alg_face_list = []
     for x in bth_alg_face_list:
@@ -62,10 +63,19 @@ def recognize_celeb(bth_alg_face_list, device, emb_model, classify_model,
         bth_names = []
         aligned_faces_tf = torch.stack(tf_list, dim=0)
         embeddings = find_embedding(aligned_faces_tf.to(device), emb_model)
-        names = identify_person(embeddings, classify_model, label2name_df, 
-                                    threshold)
-        n_faces_4_image = [len(x) for x in bth_alg_face_list]
+        list_names = []
+        for cls_model in classify_models:
+            names = identify_person(embeddings, cls_model, label2name_df, 
+                                        threshold)
+            list_names.append(names)
+        ens_results = list(zip(*list_names))
         
+        names = []
+        for ens_result in ens_results:
+            max_freq_name = max(Counter(ens_result).items(), key = lambda ele : ele[1])
+            names.append(max_freq_name[0])
+
+        n_faces_4_image = [len(x) for x in bth_alg_face_list]
         counter = 0
         for n_face in n_faces_4_image:
             bth_names.append(names[counter: counter + n_face])
@@ -314,8 +324,7 @@ if __name__ == '__main__':
     args_parser.add_argument('-i', '--image_path', default='demo.png', type=str)
     args_parser.add_argument('-o', '--output_path', default='demo_recognition.png', 
                                 type=str)
-    args_parser.add_argument('-m', '--classify_model', default='model_best.pth', 
-                                type=str)
+    args_parser.add_argument('-m', '--classify_model', nargs='+', type=str)
     args_parser.add_argument('-l2n', '--label2name', default='label2name.csv', 
                                 type=str)
     args_parser.add_argument('-w', '--pre_trained_emb', default='vggface2', 
@@ -369,9 +378,13 @@ if __name__ == '__main__':
     emb_model = getattr(model_md, args.encoder)(**enc_args).to(device)
 
     # classify from embedding model
-    classify_model = model_md.MLPModel(args.input_dim_emb, args.num_classes)
-    load_model_classify(args.classify_model, classify_model)
-    classify_model = classify_model.to(device)
+    cls_model_paths = list(args.classify_model)
+    classify_models = []
+    for path in cls_model_paths:
+        classify_model = model_md.MLPModel(args.input_dim_emb, args.num_classes)
+        load_model_classify(path, classify_model)
+        classify_model.to(device)
+        classify_models.append(classify_model)
 
     # emotion model (if need)
     if args.recog_emotion:
@@ -404,7 +417,7 @@ if __name__ == '__main__':
     
 
     bth_names = recognize_celeb(bth_alg_faces, device, emb_model, 
-                classify_model, transforms_default, label2name_df, 
+                classify_models, transforms_default, label2name_df, 
                     args.recog_threshold)
 
     names = bth_names[0]

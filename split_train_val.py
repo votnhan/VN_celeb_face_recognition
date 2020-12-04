@@ -63,7 +63,7 @@ if __name__ == "__main__":
     
     dict_labels, label_2_seq_dict = create_file_describe_ds(args.describe_file, 
                                         args.out_dict_labels)
-    write_json(label_2_seq_dict, args.label_2_seq, log=True)
+    write_json(args.label_2_seq, label_2_seq_dict, log=True)
     dict_train, dict_val = split_train_val(args.out_dict_labels, 
                                 args.train_file, args.val_file, 
                                 args.n_samples_val)
