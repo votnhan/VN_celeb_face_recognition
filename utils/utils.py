@@ -4,8 +4,10 @@ import matplotlib.pyplot as plt
 import pandas as pd
 import glob
 import shutil
+import pafy
 import pickle as pkl
 from PIL import Image
+from s3_utils import s3_url_generator
 
 
 class MetricTracker:
@@ -104,6 +106,7 @@ def convert_ds_folder_2_def_structure(root_dir, output_dir, label_file):
     label_df.to_csv(label_file, index=False)
     print('Saved label file {}.'.format(label_file))
 
+
 def convert_id_ds_2_def_structure(root_dir, output_dir, label_file):
     if not os.path.exists(output_dir):
         os.makedirs(output_dir)
@@ -132,3 +135,24 @@ def convert_id_ds_2_def_structure(root_dir, output_dir, label_file):
 def load_pickle(save_file):
     with open(save_file, "rb") as of_:
         return  pkl.load(of_)
+
+
+def generate_url_video(args, s3_client):
+    video_url = None
+    if args.youtube_video:
+        pafy_obj = pafy.new(args.youtube_link)
+        play = pafy_obj.getbest(preftype="mp4")
+        if play is None:
+            print('This Youtube video did not support mp4 format !')
+            return 
+        print('Video resolution: {}, video format: {}'.format(play.resolution, 
+                play.extension))
+        video_url = play.url
+    elif args.s3_video:
+        video_infor = read_json(args.s3_video_infor)
+        video_url = s3_url_generator(s3_client, video_infor['bucket'], 
+                                    video_infor['file_name'])
+    else:
+        video_url = args.video_path
+
+    return video_url
