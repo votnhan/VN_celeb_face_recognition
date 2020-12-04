@@ -216,7 +216,7 @@ if __name__ == '__main__':
                                 type=str)
     args_parser.add_argument('-w', '--pre_trained_emb', default='vggface2', 
                                 type=str)
-    args_parser.add_argument('-dv', '--device', default='GPU', type=str) 
+    args_parser.add_argument('-dv', '--device', default='cuda:0', type=str) 
     args_parser.add_argument('-id', '--input_dim_emb', default=512, type=int) 
     args_parser.add_argument('-nc', '--num_classes', default=1001, type=int)
     args_parser.add_argument('-ov', '--output_video', default='', type=str)
@@ -249,9 +249,7 @@ if __name__ == '__main__':
 
     args = args_parser.parse_args()
 
-    device = 'cpu'
-    if args.device == 'GPU':
-        device = 'cuda:0'
+    device = args.device
 
     # Prepare 3 models, database for label to name
     label2name_df = pd.read_csv(args.label2name)

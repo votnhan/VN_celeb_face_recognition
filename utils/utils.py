@@ -41,7 +41,7 @@ def read_json(filename):
 
 def write_json(filename, content_dict, log=True):
     with open(filename, 'w') as fp:
-        json.dump(content_dict, fp, indent=True)
+        json.dump(content_dict, fp, ensure_ascii=False, indent=True)
 
     if log:
         print('Write json file {}'.format(filename))
@@ -107,14 +107,14 @@ def convert_ds_folder_2_def_structure(root_dir, output_dir, label_file):
     print('Saved label file {}.'.format(label_file))
 
 
-def convert_id_ds_2_def_structure(root_dir, output_dir, label_file):
+def convert_id_ds_2_def_structure(root_dir, output_dir, wrong_format):
     if not os.path.exists(output_dir):
         os.makedirs(output_dir)
 
     path_str = root_dir + '/*/*'
     image_paths = glob.glob(path_str)
     n_images = len(image_paths)
-    label_list = []
+    wrong_format_counter = 0
     for idx, image_path in enumerate(image_paths):
         if not os.path.isfile(image_path):
             continue
@@ -122,14 +122,15 @@ def convert_id_ds_2_def_structure(root_dir, output_dir, label_file):
         print('Copying file {}'.format(image_path))
         label, image_file = image_path.split('/')[-2: ]
         image_name, ext = image_file.split('.')
+        if ext not in ['png', 'jpg', 'jpeg']:
+            wrong_format.write(image_path + '\n')
+            wrong_format_counter += 1
+            continue
         new_image_file = '{}_{}.{}'.format(label, image_name, ext)
         new_img_path = os.path.join(output_dir, new_image_file)
         shutil.copyfile(image_path, new_img_path)
-        label_list.append((new_image_file, int(label)))
 
-    label_df = pd.DataFrame(data=label_list, columns=['image', 'label'])
-    label_df.to_csv(label_file, index=False)
-    print('Saved label file {}.'.format(label_file))
+    print('Samples wrong format: {}'.format(wrong_format_counter))
 
 
 def load_pickle(save_file):
@@ -138,7 +139,7 @@ def load_pickle(save_file):
 
 
 def generate_url_video(args, s3_client):
-    video_url = None
+    video_url = ''
     if args.youtube_video:
         pafy_obj = pafy.new(args.youtube_link)
         play = pafy_obj.getbest(preftype="mp4")

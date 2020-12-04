@@ -111,7 +111,7 @@ def find_celeb_infor_in_interval(df_for_itv, unknown_name, n_appear):
     return final_bboxes_dict, start_itv, end_itv
 
 
-def main(args, detect_model, embedding_model, classify_model, fa_model, device, 
+def main(args, detect_model, embedding_model, classify_models, fa_model, device, 
             label2name_df, target_fs, center_point, frame_idxes):
     
     if not os.path.exists(args.output_frame):
@@ -214,7 +214,7 @@ def main(args, detect_model, embedding_model, classify_model, fa_model, device,
             break
 
 
-        bth_names = recognize_celeb(bth_alg_faces, device, emb_model, classify_model, 
+        bth_names = recognize_celeb(bth_alg_faces, device, emb_model, classify_models, 
                     transforms_default, label2name_df, threshold)
 
         np_image_recogs = []
@@ -300,11 +300,10 @@ if __name__ == '__main__':
                                 type=str)
     args_parser.add_argument('-ot', '--output_tracker', default='tracker.csv', 
                                 type=str)
-    args_parser.add_argument('-m', '--classify_model', default='model_best.pth', 
-                                type=str)
+    args_parser.add_argument('-m', '--classify_model', nargs='+', type=str)
     args_parser.add_argument('-l2n', '--label2name', default='label2name.csv', 
                                 type=str)
-    args_parser.add_argument('-dv', '--device', default='GPU', type=str) 
+    args_parser.add_argument('-dv', '--device', default='cuda:0', type=str) 
     args_parser.add_argument('-id', '--input_dim_emb', default=512, type=int) 
     args_parser.add_argument('-nc', '--num_classes', default=1001, type=int)
     args_parser.add_argument('-sfr', '--save_frame_recognized', 
@@ -353,9 +352,7 @@ if __name__ == '__main__':
 
     args = args_parser.parse_args()
 
-    device = 'cpu'
-    if args.device == 'GPU':
-        device = 'cuda:0'
+    device = args.device
 
     # Prepare 3 models, database for label to name
     label2name_df = pd.read_csv(args.label2name, encoding='utf-8')
@@ -374,9 +371,13 @@ if __name__ == '__main__':
     emb_model = getattr(model_md, args.encoder)(**enc_args).to(device)
 
     # classify from embedding model
-    classify_model = model_md.MLPModel(args.input_dim_emb, args.num_classes)
-    load_model_classify(args.classify_model, classify_model)
-    classify_model = classify_model.to(device)
+    cls_model_paths = list(args.classify_model)
+    classify_models = []
+    for path in cls_model_paths:
+        classify_model = model_md.MLPModel(args.input_dim_emb, args.num_classes)
+        load_model_classify(path, classify_model)
+        classify_model.to(device)
+        classify_models.append(classify_model)
 
     # center point, face size after alignment
     target_fs = (args.target_face_size, args.target_face_size)
@@ -386,7 +387,7 @@ if __name__ == '__main__':
     frame_idxes = list(args.frame_idxes) 
     if not os.path.exists(args.output_tracker):
         print('Create tracker file {}'.format(args.output_tracker))
-        tracker_df = main(args, detection_md, emb_model, classify_model, fa_model, device, 
+        tracker_df = main(args, detection_md, emb_model, classify_models, fa_model, device, 
                             label2name_df, target_fs, center_point, frame_idxes)
     else:
         print('Re-use tracker file {}'.format(args.output_tracker))
