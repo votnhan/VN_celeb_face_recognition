@@ -159,8 +159,8 @@ class IResNet(nn.Module):
         return x
 
 
-def _iresnet(arch, block, layers, pretrained, progress, freeze_weights, checkpoint_path='', 
-                **kwargs):
+def _iresnet(arch, block, layers, pretrained, progress, freeze_weights, 
+                checkpoint_path='', n_new_classes=0, **kwargs):
     model = IResNet(block, layers, **kwargs)
     if pretrained:
         if checkpoint_path == '':
@@ -170,6 +170,10 @@ def _iresnet(arch, block, layers, pretrained, progress, freeze_weights, checkpoi
             print('Loaded encoder state dict from checkpoint path {}'.format(checkpoint_path))
             state_dict = torch.load(checkpoint_path)['state_dict']
         model.load_state_dict(state_dict, strict=False)
+
+    if n_new_classes > 0:
+        n_in_feature = model.logits.in_features
+        model.logits = nn.Linear(n_in_feature, n_new_classes)
 
     if freeze_weights:
         print('Freezing weights !')
