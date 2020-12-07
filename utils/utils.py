@@ -90,16 +90,17 @@ def convert_ds_folder_2_def_structure(root_dir, output_dir, label_file):
 
     path_str = root_dir + '/*/*'
     image_paths = glob.glob(path_str)
+    image_paths.sort()
     n_images = len(image_paths)
     label_list = []
     for idx, image_path in enumerate(image_paths):
         print('-----{}/{}-----'.format(idx, n_images))
+        print('Copying file {}'.format(image_path))
         label, image_file = image_path.split('/')[-2: ]
         image_name, ext = image_file.split('.')
         new_image_file = '{}_{}.{}'.format(label, image_name, ext)
         new_img_path = os.path.join(output_dir, new_image_file)
         shutil.copyfile(image_path, new_img_path)
-        print('Copied file {}'.format(image_path))
         label_list.append((new_image_file, int(label)-1))
 
     label_df = pd.DataFrame(data=label_list, columns=['image', 'label'])
