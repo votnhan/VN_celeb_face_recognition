@@ -86,10 +86,10 @@ def recognize_celeb(bth_alg_face_list, device, emb_model, classify_models,
     return bth_names
 
 
-def recognize_emotion(bth_alg_face_list, device, emt_model, transforms, 
+def recognize_emotion(bth_faces_list, device, emt_model, transforms, 
                         map_label_func, topk=6):
     alg_face_list = []
-    for x in bth_alg_face_list:
+    for x in bth_faces_list:
         alg_face_list += x
 
     emt_tf_list = []
@@ -103,7 +103,7 @@ def recognize_emotion(bth_alg_face_list, device, emt_model, transforms,
         aligned_faces_tf = torch.stack(emt_tf_list, dim=0)
         emotions_cls, probs = find_emotion(aligned_faces_tf.to(device), 
                                 emt_model, topk)
-        n_faces_4_image = [len(x) for x in bth_alg_face_list]
+        n_faces_4_image = [len(x) for x in bth_faces_list]
         counter = 0
         for n_face in n_faces_4_image:
             if n_face > 0:
@@ -114,8 +114,8 @@ def recognize_emotion(bth_alg_face_list, device, emt_model, transforms,
             bth_probs.append(probs[counter: counter + n_face])
             counter += n_face
     else:
-        bth_emotions = [[] for x in range(len(bth_alg_face_list))]
-        bth_probs = [[] for x in range(len(bth_alg_face_list))]
+        bth_emotions = [[] for x in range(len(bth_faces_list))]
+        bth_probs = [[] for x in range(len(bth_faces_list))]
     
     return bth_emotions, bth_probs
 
@@ -285,16 +285,18 @@ def parallel_detect_and_align(rgb_images, detection_md, center_point,
     bth_boxes, _, bth_landmarks, = detection_md.inference(rgb_images, 
                                         landmark=True)
     zip_bb_ldm = zip(bth_boxes, bth_landmarks)
-    bth_aligned_faces, bth_chosen_bb = [], []
+    bth_aligned_faces, bth_chosen_bb, bth_chosen_faces = [], [], []
     for idx, (boxes, landmarks) in enumerate(zip_bb_ldm):
         aligned_face_list = []
         chosen_boxes = []
+        chosen_faces = []
         rgb_image = rgb_images[idx]
         if len(boxes) > 0:
             list_face, face_idx = get_face_from_boxes(rgb_image, boxes)
             if len(face_idx) > 0:
                 chosen_boxes = [boxes[x] for x in face_idx]
                 chosen_landmarks = [landmarks[x] for x in face_idx]
+                chosen_faces = list_face
                 for idx, face in enumerate(list_face):
                     moved_landmark = move_landmark_to_box(chosen_boxes[idx], 
                                         chosen_landmarks[idx])
@@ -312,8 +314,10 @@ def parallel_detect_and_align(rgb_images, detection_md, center_point,
         
         bth_aligned_faces.append(aligned_face_list) 
         bth_chosen_bb.append(chosen_boxes)
+        bth_chosen_faces.append(chosen_faces)
 
-    return bth_aligned_faces, bth_chosen_bb
+    return bth_aligned_faces, bth_chosen_bb, bth_chosen_faces
+
 
 if __name__ == '__main__':
     args_parser = argparse.ArgumentParser(description='Face \

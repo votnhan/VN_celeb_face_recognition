@@ -206,9 +206,8 @@ def main(args, detect_model, embedding_model, classify_models, fa_model, device,
                                             box_requirements, False)
                 
         elif args.inference_method == 'par_fd_vs_aln':
-            bth_alg_faces, bth_chosen_boxes = parallel_detect_and_align(rgb_images, 
-                                        detection_md, center_point, target_fs, 
-                                        False)
+            bth_alg_faces, bth_chosen_boxes, bth_chosen_faces = parallel_detect_and_align(rgb_images, 
+                                                        detection_md, center_point, target_fs, False)
         else:
             print('Do not support {} method.'.format(args.args.inference_method))
             break
@@ -228,7 +227,7 @@ def main(args, detect_model, embedding_model, classify_models, fa_model, device,
 
         if args.recog_emotion:
             map_func = np.vectorize(lambda x: idx2etag[x])
-            bth_emotions, bth_probs = recognize_emotion(bth_alg_faces, device, 
+            bth_emotions, bth_probs = recognize_emotion(bth_chosen_faces, device, 
                                     emt_model, trans_emotion_inf, map_func ,
                                     args.topk_emotions)
             for idx, (emotions, probs) in enumerate(zip(bth_emotions, bth_probs)):

@@ -56,7 +56,7 @@ def crop_and_align_face(model, rgb_image, center_point, target_fs):
 
 
 def crop_face(model, rgb_image):
-    bth_bboxes, _ = detection_md.inference([rgb_image], landmark=False)
+    bth_bboxes, _ = model.inference([rgb_image], landmark=False)
     bboxes = bth_bboxes[0]
     face = None
     if len(bboxes) > 0:

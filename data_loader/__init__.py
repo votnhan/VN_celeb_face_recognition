@@ -24,6 +24,25 @@ rank1_VNceleb_aug_obj = iaa.Sequential([
 	)
 ])
 
+
+class SquarePad:
+  def __call__(self, image):
+    w, h = image.size
+    max_wh = np.max([w, h])
+    hp = int((max_wh - w) / 2)
+    vp = int((max_wh - h) / 2)
+    padding = (hp, vp, hp, vp)
+    padded_img = F.pad(image, padding, 0, 'constant')
+    h, w = padded_img.size
+    if h > w:
+      cropped_img = padded_img.crop((0, 0, w, h-1))
+    elif h < w:
+      cropped_img = padded_img.crop((0, 0, w-1, h))
+    else:
+      cropped_img = padded_img
+    return cropped_img
+
+
 def fix_std(img):
   return (img - 127.5) / 128
 
@@ -72,8 +91,7 @@ transforms_rank1_VNceleb_aug = tf.Compose([
 
 
 trans_emotion_inf = tf.Compose([
-  # tf.Resize(256),
-  # tf.CenterCrop(224),
+  SquarePad(),
   tf.Resize(224),
   tf.ToTensor(),
   tf.Normalize(mean=[0.485, 0.456, 0.406],
