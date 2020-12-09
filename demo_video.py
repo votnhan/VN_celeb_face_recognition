@@ -43,7 +43,7 @@ def export_video_face_recognition(output_frame_dir, fps, output_path):
     print('Save exported video in {} ...'.format(output_path))
         
 
-def main(args, detect_model, embedding_model, classify_model, fa_model, device, 
+def main(args, detect_model, embedding_model, classify_models, fa_model, device, 
             label2name_df, target_fs, center_point):
     
     if not os.path.exists(args.output_frame):
@@ -124,7 +124,7 @@ def main(args, detect_model, embedding_model, classify_model, fa_model, device,
 
 
         bth_names = recognize_celeb(bth_alg_faces, device, 
-                                emb_model, classify_model, 
+                                emb_model, classify_models, 
                                 transforms_default, 
                                 label2name_df, args.recog_threshold)
 
@@ -210,8 +210,7 @@ if __name__ == '__main__':
                                 type=str)
     args_parser.add_argument('-ot', '--output_tracker', default='tracker.csv', 
                                 type=str)
-    args_parser.add_argument('-m', '--classify_model', default='model_best.pth', 
-                                type=str)
+    args_parser.add_argument('-m', '--classify_model', nargs='+', type=str)
     args_parser.add_argument('-l2n', '--label2name', default='label2name.csv', 
                                 type=str)
     args_parser.add_argument('-w', '--pre_trained_emb', default='vggface2', 
@@ -268,16 +267,19 @@ if __name__ == '__main__':
     emb_model = getattr(model_md, args.encoder)(**enc_args).to(device)
 
     # classify from embedding model
-    classify_model = model_md.MLPModel(args.input_dim_emb, args.num_classes)
-    load_model_classify(args.classify_model, classify_model)
-    classify_model = classify_model.to(device)
-
+    cls_model_paths = list(args.classify_model)
+    classify_models = []
+    for path in cls_model_paths:
+        classify_model = model_md.MLPModel(args.input_dim_emb, args.num_classes)
+        load_model_classify(path, classify_model)
+        classify_model.to(device)
+        classify_models.append(classify_model)
 
     # center point, face size after alignment
     target_fs = (args.target_face_size, args.target_face_size)
     center_point = center_point_dict[str(target_fs)]
 
-    main(args, detection_md, emb_model, classify_model, fa_model, device, 
+    main(args, detection_md, emb_model, classify_models, fa_model, device, 
             label2name_df, target_fs, center_point)
 
     if args.output_video != '':

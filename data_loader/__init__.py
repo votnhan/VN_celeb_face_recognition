@@ -1,10 +1,12 @@
 import torch
 import numpy as np
+import torchvision.transforms.functional as F
 from torchvision import transforms as tf
 from .vn_celeb_dataset import VNCelebDataset
 from .vn_celeb_emb_dataset import VNCelebEmbDataset
 from imgaug import augmenters as iaa
 from PIL import Image
+
 
 fixed_size = 160
 sometimes = lambda aug: iaa.Sometimes(0.8, aug)

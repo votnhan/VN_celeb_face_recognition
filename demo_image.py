@@ -381,6 +381,7 @@ if __name__ == '__main__':
     enc_args = read_json(args.encoder_args)
     emb_model = getattr(model_md, args.encoder)(**enc_args).to(device)
 
+    
     # classify from embedding model
     cls_model_paths = list(args.classify_model)
     classify_models = []
