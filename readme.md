@@ -42,7 +42,7 @@ pip install gdown
 Download trained models for tasks: 
 1. MLP models:
 ```
-gdown https://drive.google.com/uc?id=1CfK8whYAhelw6O3-SStN59-_f1tNX_N7 -O weights/mlps/mlp_models.zip
+gdown https://drive.google.com/uc?id=1CfK8whYAhelw6O3-SStN59-_f1tNX_N7 -O weights/mlp/mlp_models.zip
 unzip -q weights/mlp/mlp_models.zip -d weights/mlp/
 rm weights/mlp/mlp_models.zip
 ```
