@@ -12,6 +12,7 @@ import pandas as pd
 import numpy as np
 import models as model_md 
 import face_alignment
+import logging
 
 
 def load_model_classify(checkpoint_path, model, logger_id='celeb_statistic'):

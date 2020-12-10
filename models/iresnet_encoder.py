@@ -163,6 +163,7 @@ class IResNet(nn.Module):
 def _iresnet(arch, block, layers, pretrained, progress, freeze_weights, 
                 checkpoint_path='', n_new_classes=0, **kwargs):
     logger = logging.getLogger(kwargs['logger_id'])
+    kwargs.pop('logger_id', None)
     model = IResNet(block, layers, **kwargs)
     if pretrained:
         if checkpoint_path == '':
