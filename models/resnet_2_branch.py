@@ -2,6 +2,7 @@ import torch.nn as nn
 import math
 import torch
 import torch.utils.model_zoo as model_zoo
+import logging
 from collections import OrderedDict
 from .resnet_2_branch_utils import Bottleneck, load_state_dict, model_urls
 
@@ -75,13 +76,15 @@ def resnet_2branch_50(pretrained=False, checkpoint_path=None,**kwargs):
     Args:
         pretrained (bool): If True, returns a model pre-trained on ImageNet
     """
+    logger = logging.getLogger(kwargs['logger_id'])
+    kwargs.pop('logger_id', None)
     model = ResNet2Branch(Bottleneck, [3, 4, 6, 3], **kwargs)
     if pretrained:
-        print("Loading Pretrained data!")
+        logger.info("Loading Pretrained data!")
         load_state_dict(model, model_zoo.load_url(model_urls['resnet50']))
 
     if checkpoint_path is not None:
-        print('Loaded emotion model from checkpoint path {}'.format(checkpoint_path))
+        logger.info('Loaded emotion model from checkpoint path {}'.format(checkpoint_path))
         state_dict = torch.load(checkpoint_path)['state_dict']
         model = nn.DataParallel(model)
         model.load_state_dict(state_dict)

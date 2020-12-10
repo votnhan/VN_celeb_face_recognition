@@ -14,9 +14,10 @@ import models as model_md
 import face_alignment
 
 
-def load_model_classify(checkpoint_path, model):
+def load_model_classify(checkpoint_path, model, logger_id='celeb_statistic'):
+    logger = logging.getLogger(logger_id)
     cp = torch.load(checkpoint_path)
-    print("Loading checkpoint: {} ... after training for {} epochs."\
+    logger.info("Loading checkpoint: {} ... after training for {} epochs."\
                 .format(checkpoint_path, cp['epoch']))
     model.load_state_dict(cp['state_dict'])
     return model
@@ -282,8 +283,12 @@ def sequential_detect_and_align(rgb_image, detection_md, fa_model, center_point,
 
 def parallel_detect_and_align(rgb_images, detection_md, center_point, 
                                 target_fs, log=False):
-    bth_boxes, _, bth_landmarks, = detection_md.inference(rgb_images, 
-                                        landmark=True)
+    if hasattr(detection_md, 'module'):
+        bth_boxes, _, bth_landmarks, = detection_md.module.inference(rgb_images, 
+                                            landmark=True)
+    else:
+        bth_boxes, _, bth_landmarks, = detection_md.inference(rgb_images, 
+                                            landmark=True)
     zip_bb_ldm = zip(bth_boxes, bth_landmarks)
     bth_aligned_faces, bth_chosen_bb, bth_chosen_faces = [], [], []
     for idx, (boxes, landmarks) in enumerate(zip_bb_ldm):

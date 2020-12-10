@@ -1,5 +1,6 @@
 {
     "pretrained": false,
     "num_classes": 690,
-    "checkpoint_path": null
+    "checkpoint_path": null,
+    "logger_id": "celeb_statistic"
 }

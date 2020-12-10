@@ -4,6 +4,7 @@ import torchvision.models.detection.backbone_utils as backbone_utils
 import torchvision.models._utils as _utils
 import torch.nn.functional as F
 import numpy as np
+import logging
 from collections import OrderedDict
 
 
@@ -53,8 +54,8 @@ class LandmarkHead(nn.Module):
 
 class RetinaFace(nn.Module):
     def __init__(self, backbone_cfg, phase='train', backbone_path=None, device='cuda:0', 
-                    conf_thres=0.02, topk_bf_nms=5000, keep_top_k=750, nms_thres=0.4, vis_thres=0.6, 
-                    checkpoint_path = None):
+                    conf_thres=0.02, topk_bf_nms=5000, keep_top_k=750, nms_thres=0.4, 
+                    vis_thres=0.6, checkpoint_path = None, logger_id='detection_md'):
         
         """
         :param cfg:  Network related settings.
@@ -70,6 +71,7 @@ class RetinaFace(nn.Module):
         self.keep_top_k = keep_top_k
         self.nms_thres = nms_thres
         self.vis_thres = vis_thres
+        self.logger = logging.getLogger(logger_id)
 
         backbone = None
         if self.cfg['name'] == 'mobilenet0.25':
@@ -152,9 +154,6 @@ class RetinaFace(nn.Module):
         return output
 
     def inference(self, rgb_images, landmark=True):
-        self.eval()
-        self.to(self.device)
-
         arr_images = [np.float32(rgb_image) for rgb_image in rgb_images]
         img_height, img_width, _ = arr_images[0].shape
         scale = torch.Tensor([img_width, img_height, img_width, img_height])
@@ -164,11 +163,9 @@ class RetinaFace(nn.Module):
         tensor_image = tensor_image.to(self.device, dtype=torch.float)
         tensor_scale = scale.to(self.device)
         
-        # print(type(tensor_image))
         with torch.no_grad():
             batch_loc, batch_conf, batch_landms = self.forward(tensor_image)
         
-        # print(loc.size())
         priorbox = PriorBox(self.cfg, image_size=(img_height, img_width))
         priors = priorbox.forward()
         priors = priors.to(self.device)
@@ -233,7 +230,7 @@ class RetinaFace(nn.Module):
 
     
     def load_model(self, pretrained_path):
-        print('Loading pretrained model from {}'.format(pretrained_path))
+        self.logger.info('Loading pretrained model from {}'.format(pretrained_path))
         pretrained_dict = torch.load(pretrained_path, map_location='cpu')
 
         if "state_dict" in pretrained_dict.keys():
@@ -251,9 +248,9 @@ class RetinaFace(nn.Module):
         used_pretrained_keys = model_keys & ckpt_keys
         unused_pretrained_keys = ckpt_keys - model_keys
         missing_keys = model_keys - ckpt_keys
-        print('Missing keys:{}'.format(len(missing_keys)))
-        print('Unused checkpoint keys:{}'.format(len(unused_pretrained_keys)))
-        print('Used keys:{}'.format(len(used_pretrained_keys)))
+        self.logger.info('Missing keys:{}'.format(len(missing_keys)))
+        self.logger.info('Unused checkpoint keys:{}'.format(len(unused_pretrained_keys)))
+        self.logger.info('Used keys:{}'.format(len(used_pretrained_keys)))
         assert len(used_pretrained_keys) > 0, 'load NONE from pretrained checkpoint'
         return True
 

@@ -8,5 +8,6 @@
     "topk_bf_nms": 5000,
     "keep_top_k": 750,
     "nms_thres": 0.4, 
-    "vis_thres": 0.6
+    "vis_thres": 0.6,
+    "logger_id": "celeb_statistic"
 }

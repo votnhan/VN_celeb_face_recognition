@@ -1,4 +1,5 @@
 import torch
+import logging
 from torch.nn import functional as F
 from torch import nn
 from torchvision.models.utils import load_state_dict_from_url
@@ -161,13 +162,14 @@ class IResNet(nn.Module):
 
 def _iresnet(arch, block, layers, pretrained, progress, freeze_weights, 
                 checkpoint_path='', n_new_classes=0, **kwargs):
+    logger = logging.getLogger(kwargs['logger_id'])
     model = IResNet(block, layers, **kwargs)
     if pretrained:
         if checkpoint_path == '':
             state_dict = load_state_dict_from_url(model_urls[arch],
                                                 progress=progress)
         else:
-            print('Loaded encoder state dict from checkpoint path {}'.format(checkpoint_path))
+            logger.info('Loaded encoder state dict from checkpoint path {}'.format(checkpoint_path))
             state_dict = torch.load(checkpoint_path)['state_dict']
         model.load_state_dict(state_dict, strict=False)
 
@@ -176,7 +178,7 @@ def _iresnet(arch, block, layers, pretrained, progress, freeze_weights,
         model.logits = nn.Linear(n_in_feature, n_new_classes)
 
     if freeze_weights:
-        print('Freezing weights !')
+        logger.info('Freezing weights !')
         for param in model.parameters():
             param.requires_grad = False
         for param in model.logits.parameters():

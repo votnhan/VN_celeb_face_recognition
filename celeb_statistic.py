@@ -11,7 +11,9 @@ import face_alignment
 import torch
 import pafy
 import math
+import logging
 import models as model_md 
+from datetime import datetime
 from collections import Counter
 from pathlib import Path
 from itertools import groupby
@@ -31,6 +33,7 @@ from imgaug import augmenters as iaa
 from align_face import alignment, center_point_dict
 from data_loader import transforms_default, trans_emotion_inf
 from utils import convert_sec_to_max_time_quantity
+from logger import setup_logging
 
 
 def export_json_stat_dynamic_itv(tracker_df, n_intervals, n_appear=4, 
@@ -122,6 +125,8 @@ def main(args, detect_model, embedding_model, classify_models, fa_model, device,
             'min_dim': args.min_dim_box,
             'box_ratio': args.box_ratio
         }
+    
+    logger = logging.getLogger('celeb_statistic')
 
     # emotion model (if need)
     if args.recog_emotion:
@@ -131,10 +136,10 @@ def main(args, detect_model, embedding_model, classify_models, fa_model, device,
 
     # Create threshold
     if args.local_thresholds != '':
-      print('Using local thresholds !')
+      logger.info('Using local thresholds !')
       threshold = read_json(args.local_thresholds)
     else:
-      print('Using global a threshold !')
+      logger.info('Using global a threshold !')
       threshold = {}
       for i in range(args.num_classes):
           threshold[str(i)] = args.recog_threshold
@@ -192,7 +197,7 @@ def main(args, detect_model, embedding_model, classify_models, fa_model, device,
 
         if (processed_frame % args.log_step) == 0:
             hms_time = convert_sec_to_max_time_quantity(time_in_video)
-            print('Processing for frame: {}, time: {}'.format(count, 
+            logger.info('Processing for frame: {}, time: {}'.format(count, 
                         hms_time))
        
         rgb_images = []
@@ -209,7 +214,7 @@ def main(args, detect_model, embedding_model, classify_models, fa_model, device,
             bth_alg_faces, bth_chosen_boxes, bth_chosen_faces = parallel_detect_and_align(rgb_images, 
                                                         detection_md, center_point, target_fs, False)
         else:
-            print('Do not support {} method.'.format(args.args.inference_method))
+            logger.info('Do not support {} method.'.format(args.args.inference_method))
             break
 
 
@@ -282,8 +287,8 @@ def main(args, detect_model, embedding_model, classify_models, fa_model, device,
     processed_time = end_time - start_time
     fps_process = int(processed_frame / processed_time)
     cap.release()
-    print('Saved tracker file in {} ...'.format(args.output_tracker))
-    print('FPS for recognition face: {}'.format(fps_process))
+    logger.info('Saved tracker file in {} ...'.format(args.output_tracker))
+    logger.info('FPS for face and emotion recognition: {}'.format(fps_process))
     tracked_df = pd.read_csv(args.output_tracker)
     return tracked_df
 
@@ -348,10 +353,30 @@ if __name__ == '__main__':
     args_parser.add_argument('--n_frames', default=16, type=int)
     args_parser.add_argument('--s3_video', action='store_true')
     args_parser.add_argument('--s3_video_infor', default='', type=str)
+    args_parser.add_argument('--multi_gpus_idx', nargs='+', type=int)
+    args_parser.add_argument('--output_inf_dir', default='output_demo', type=str)
+    args_parser.add_argument('--logger_id', default='celeb_statistic', type=str)
 
     args = args_parser.parse_args()
 
+    # set up logger for inference
+    run_id = datetime.now().strftime(r'%m%d_%H%M%S')
+    log_dir = os.path.join(args.output_inf_dir, run_id)
+    if not os.path.exists(log_dir):
+        os.makedirs(log_dir)
+    setup_logging(log_dir)
+    logger = logging.getLogger(args.logger_id)
+    logger.info('Setup logger in directory: {}'.format(log_dir))
+    logger.info('Running argument parameters: ')
+    for k, v in args.__dict__.items():
+        logger.info('--{}: {}'.format(k, v))
+
     device = args.device
+
+    # multiple gpus for infercence
+    gpu_idx = []
+    if args.multi_gpus_idx is not None:
+        gpu_idx = list(args.multi_gpus_idx)
 
     # Prepare 3 models, database for label to name
     label2name_df = pd.read_csv(args.label2name)
@@ -360,23 +385,42 @@ if __name__ == '__main__':
     det_args = read_json(args.detection_args)
     detection_md = getattr(model_md, args.detection)(**det_args)
     detection_md.eval()
+    logger.info('Loading detection model {} done ...'.format(args.detection))
 
     # face alignment model
     fa_model = face_alignment.FaceAlignment(face_alignment.LandmarksType._2D, 
                 flip_input=False, device=device)
+    logger.info('Loading face alignment model with LandmarksType done ...')
 
     # face embedding model
     enc_args = read_json(args.encoder_args)
-    emb_model = getattr(model_md, args.encoder)(**enc_args).to(device)
+    emb_model = getattr(model_md, args.encoder)(**enc_args)
+    logger.info('Loading embedding model {} done ...'.format(args.encoder))
 
     # classify from embedding model
     cls_model_paths = list(args.classify_model)
     classify_models = []
     for path in cls_model_paths:
         classify_model = model_md.MLPModel(args.input_dim_emb, args.num_classes)
-        load_model_classify(path, classify_model)
-        classify_model.to(device)
+        load_model_classify(path, classify_model, args.logger_id)
         classify_models.append(classify_model)
+
+    logger.info('Loading mlp models done ...')
+
+    if len(gpu_idx) > 0:
+        new_cls_models = []
+        detection_md = torch.nn.DataParallel(detection_md, gpu_idx)
+        emb_model = torch.nn.DataParallel(emb_model, gpu_idx)
+        for cls_model in classify_models:
+            cls_model = torch.nn.DataParallel(cls_model, gpu_idx)
+            new_cls_models.append(cls_model)
+        classify_models = new_cls_models
+        logger.info('Using multiple gpus with indexes {} !'.format(gpu_idx))
+
+    detection_md.to(device)
+    emb_model.to(device)
+    for cls_model in classify_models:
+        cls_model.to(device)
 
     # center point, face size after alignment
     target_fs = (args.target_face_size, args.target_face_size)
@@ -385,15 +429,15 @@ if __name__ == '__main__':
     # choose frames for a second
     frame_idxes = list(args.frame_idxes) 
     if not os.path.exists(args.output_tracker):
-        print('Create tracker file {}'.format(args.output_tracker))
+        logger.info('Create tracker file {} and start indexing'.format(args.output_tracker))
         tracker_df = main(args, detection_md, emb_model, classify_models, fa_model, device, 
                             label2name_df, target_fs, center_point, frame_idxes)
     else:
-        print('Re-use tracker file {}'.format(args.output_tracker))
+        logger.info('Re-use tracker file {}'.format(args.output_tracker))
         tracker_df = pd.read_csv(args.output_tracker)
 
     # export JSON file for video celebrity indexing 
-    print('Statistic mode: {}'.format(args.statistic_mode))
+    logger.info('Statistic mode: {}'.format(args.statistic_mode))
     dict_track = {}
     if args.statistic_mode == 'dynamic_itv':
         dict_track = export_json_stat_dynamic_itv(tracker_df, args.n_video_intervals, 
@@ -403,7 +447,7 @@ if __name__ == '__main__':
         dict_track = export_json_stat_fixed_itv(tracker_df, n_rows_in_itv, 
                             args.n_time_appear, args.ignored_name)
     else:
-        print('This statistic mode {} is not supported !'.format(args.statistic_mode))
+        logger.info('This statistic mode {} is not supported !'.format(args.statistic_mode))
     
     if args.s3_video:
         s3_video_infor = read_json(args.s3_video_infor)

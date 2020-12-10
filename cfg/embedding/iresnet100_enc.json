@@ -2,5 +2,6 @@
     "pretrained": true,
     "progress": true,
     "freeze_weights": false,
-    "checkpoint_path":""
+    "checkpoint_path":"",
+    "logger_id": "celeb_statistic"
 }
