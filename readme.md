@@ -11,6 +11,7 @@ The following example shows the use of `venv` in python pip:
 ```
 python -m venv vn_celeb_env
 source vn_celeb_env/bin/activate
+pip install --upgrade pip
 ```
 **Please make sure that the python version >= 3.6**
 ## Install basic packages and AI packages
@@ -67,7 +68,7 @@ mkdir scripts
 ```
 Download test script from **Google Drive**, place it to this `scripts` folder and grant executable permissions to the file:
 ```
-gdown https://drive.google.com/uc?id=1Sa7Y8K4sJF-fV6w4Euds70bv0F8l_-aW -O scripts/ensembles_stat.txt
+gdown https://drive.google.com/uc?id=1UVkkf4Nns5O6Lg1kty04ewXPTKE0l2k7 -O scripts/ensembles_stat.txt
 chmod 777 scripts/ensembles_stat.txt
 ```
 Run `ensembles_stat.txt` file:

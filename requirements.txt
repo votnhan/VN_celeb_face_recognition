@@ -6,3 +6,4 @@ python-dotenv
 opencv-python
 numpy
 pandas
+imgaug
