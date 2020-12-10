@@ -371,6 +371,9 @@ if __name__ == '__main__':
     for k, v in args.__dict__.items():
         logger.info('--{}: {}'.format(k, v))
 
+    args.output_tracker = os.path.join(log_dir, args.output_tracker)
+    args.json_tracker =  os.path.join(log_dir, args.json_tracker)   
+
     device = args.device
 
     # multiple gpus for infercence
