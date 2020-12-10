@@ -2,6 +2,8 @@
 temp/
 s3_utils/s3_env.txt
 output_demo/
+scripts/
+images/
 
 # Byte-compiled / optimized / DLL files
 __pycache__/
