@@ -2,6 +2,6 @@
     "pretrained": true,
     "progress": true,
     "freeze_weights": false,
-    "checkpoint_path":"",
+    "checkpoint_path":"weights/encoder/encoder_52_celeb.pth",
     "logger_id": "celeb_statistic"
 }

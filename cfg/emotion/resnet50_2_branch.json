@@ -1,6 +1,6 @@
 {
     "pretrained": false,
     "num_classes": 690,
-    "checkpoint_path": null,
+    "checkpoint_path": "weights/emotion/emotion_690_cls.pth",
     "logger_id": "celeb_statistic"
 }
