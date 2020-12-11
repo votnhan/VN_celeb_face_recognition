@@ -18,7 +18,7 @@ pip install --upgrade pip
 Clone the repository and enter to root folder of it:
 ```
 git clone <gitlab_link>
-cd VN-celeb-face-vs-emotion
+cd <project_directory>
 ```
 Install basic packages:
 ```
