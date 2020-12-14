@@ -5,6 +5,7 @@ import torchvision.models._utils as _utils
 import torch.nn.functional as F
 import numpy as np
 import logging
+import os
 from collections import OrderedDict
 
 
@@ -53,9 +54,9 @@ class LandmarkHead(nn.Module):
         return out.view(out.shape[0], -1, 10)
 
 class RetinaFace(nn.Module):
-    def __init__(self, backbone_cfg, phase='train', backbone_path=None, device='cuda:0', 
+    def __init__(self, backbone_cfg, phase='train', backbone_path=None, device='cuda', 
                     conf_thres=0.02, topk_bf_nms=5000, keep_top_k=750, nms_thres=0.4, 
-                    vis_thres=0.6, checkpoint_path = None, logger_id='detection_md'):
+                    vis_thres=0.6, checkpoint_path = None):
         
         """
         :param cfg:  Network related settings.
@@ -71,7 +72,7 @@ class RetinaFace(nn.Module):
         self.keep_top_k = keep_top_k
         self.nms_thres = nms_thres
         self.vis_thres = vis_thres
-        self.logger = logging.getLogger(logger_id)
+        self.logger = logging.getLogger(os.environ['LOGGER_ID'])
 
         backbone = None
         if self.cfg['name'] == 'mobilenet0.25':
@@ -153,7 +154,11 @@ class RetinaFace(nn.Module):
             output = (bbox_regressions, F.softmax(classifications, dim=-1), ldm_regressions)
         return output
 
-    def inference(self, rgb_images, landmark=True):
+    def to(self, device='cuda'):
+        self.device = device
+        super(RetinaFace, self).to(device)
+
+    def inference(self, rgb_images, landmark=True, parallel_model=None):
         arr_images = [np.float32(rgb_image) for rgb_image in rgb_images]
         img_height, img_width, _ = arr_images[0].shape
         scale = torch.Tensor([img_width, img_height, img_width, img_height])
@@ -164,7 +169,10 @@ class RetinaFace(nn.Module):
         tensor_scale = scale.to(self.device)
         
         with torch.no_grad():
-            batch_loc, batch_conf, batch_landms = self.forward(tensor_image)
+            if parallel_model is None:
+                batch_loc, batch_conf, batch_landms = self.forward(tensor_image)
+            else:
+                batch_loc, batch_conf, batch_landms = parallel_model(tensor_image)
         
         priorbox = PriorBox(self.cfg, image_size=(img_height, img_width))
         priors = priorbox.forward()

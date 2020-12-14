@@ -34,7 +34,9 @@ from align_face import alignment, center_point_dict
 from data_loader import transforms_default, trans_emotion_inf
 from utils import convert_sec_to_max_time_quantity
 from logger import setup_logging
+from dotenv import load_dotenv
 
+load_dotenv()
 
 def export_json_stat_dynamic_itv(tracker_df, n_intervals, n_appear=4, 
                                     unknown_name='Unknown'):
@@ -116,9 +118,6 @@ def find_celeb_infor_in_interval(df_for_itv, unknown_name, n_appear):
 
 def main(args, detect_model, embedding_model, classify_models, fa_model, device, 
             label2name_df, target_fs, center_point, frame_idxes):
-    
-    if not os.path.exists(args.output_frame):
-        os.makedirs(args.output_frame)
 
     if args.inference_method == 'seq_fd_vs_aln':
         box_requirements = {
@@ -126,7 +125,7 @@ def main(args, detect_model, embedding_model, classify_models, fa_model, device,
             'box_ratio': args.box_ratio
         }
     
-    logger = logging.getLogger('celeb_statistic')
+    logger = logging.getLogger(args.logger_id)
 
     # emotion model (if need)
     if args.recog_emotion:
@@ -156,12 +155,9 @@ def main(args, detect_model, embedding_model, classify_models, fa_model, device,
         tracker_file.write('')
 
     append_log_to_file(args.output_tracker, df_columns)
-
-    # Get http url video
-    video_path = generate_url_video(args, s3_client)
     
     # Data structure for statistic algorithm
-    cap = cv2.VideoCapture(video_path)
+    cap = cv2.VideoCapture(args.video_path)
     count = 0
     processed_frame = 0
     fps = cap.get(cv2.CAP_PROP_FPS)
@@ -207,19 +203,19 @@ def main(args, detect_model, embedding_model, classify_models, fa_model, device,
 
         if args.inference_method == 'seq_fd_vs_aln':
             bth_alg_faces, bth_chosen_boxes = sequential_detect_and_align(rgb_images, 
-                                            detection_md, center_point, target_fs, 
+                                            detect_model, center_point, target_fs, 
                                             box_requirements, False)
                 
         elif args.inference_method == 'par_fd_vs_aln':
             bth_alg_faces, bth_chosen_boxes, bth_chosen_faces = parallel_detect_and_align(rgb_images, 
-                                                        detection_md, center_point, target_fs, False)
+                                                        detect_model, center_point, target_fs, False)
         else:
             logger.info('Do not support {} method.'.format(args.args.inference_method))
             break
 
 
-        bth_names = recognize_celeb(bth_alg_faces, device, emb_model, classify_models, 
-                    transforms_default, label2name_df, threshold)
+        bth_names = recognize_celeb(bth_alg_faces, device, embedding_model, 
+                        classify_models, transforms_default, label2name_df, threshold)
 
         np_image_recogs = []
         for idx, names in enumerate(bth_names):
@@ -358,6 +354,12 @@ if __name__ == '__main__':
     args_parser.add_argument('--logger_id', default='celeb_statistic', type=str)
 
     args = args_parser.parse_args()
+
+    if not os.path.exists(args.output_frame):
+        os.makedirs(args.output_frame)
+
+    # Get http url video
+    args.video_path = generate_url_video(args, s3_client)
 
     # set up logger for inference
     run_id = datetime.now().strftime(r'%m%d_%H%M%S')

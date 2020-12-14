@@ -1,5 +1,6 @@
 import torch.nn as nn
 import math
+import os
 import torch
 import torch.utils.model_zoo as model_zoo
 import logging
@@ -76,8 +77,7 @@ def resnet_2branch_50(pretrained=False, checkpoint_path=None,**kwargs):
     Args:
         pretrained (bool): If True, returns a model pre-trained on ImageNet
     """
-    logger = logging.getLogger(kwargs['logger_id'])
-    kwargs.pop('logger_id', None)
+    logger = logging.getLogger(os.environ['LOGGER_ID'])
     model = ResNet2Branch(Bottleneck, [3, 4, 6, 3], **kwargs)
     if pretrained:
         logger.info("Loading Pretrained data!")
@@ -89,4 +89,4 @@ def resnet_2branch_50(pretrained=False, checkpoint_path=None,**kwargs):
         model = nn.DataParallel(model)
         model.load_state_dict(state_dict)
 
-    return model
+    return model.module

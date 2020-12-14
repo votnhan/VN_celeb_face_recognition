@@ -1,4 +1,5 @@
 import torch
+import os
 import logging
 from torch.nn import functional as F
 from torch import nn
@@ -162,8 +163,7 @@ class IResNet(nn.Module):
 
 def _iresnet(arch, block, layers, pretrained, progress, freeze_weights, 
                 checkpoint_path='', n_new_classes=0, **kwargs):
-    logger = logging.getLogger(kwargs['logger_id'])
-    kwargs.pop('logger_id', None)
+    logger = logging.getLogger(os.environ['LOGGER_ID'])
     model = IResNet(block, layers, **kwargs)
     if pretrained:
         if checkpoint_path == '':
@@ -171,7 +171,7 @@ def _iresnet(arch, block, layers, pretrained, progress, freeze_weights,
                                                 progress=progress)
         else:
             logger.info('Loaded encoder state dict from checkpoint path {}'.format(checkpoint_path))
-            state_dict = torch.load(checkpoint_path)['state_dict']
+            state_dict = torch.load(checkpoint_path, map_location='cpu')['state_dict']
         model.load_state_dict(state_dict, strict=False)
 
     if n_new_classes > 0:

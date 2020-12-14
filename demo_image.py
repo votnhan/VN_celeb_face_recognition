@@ -286,7 +286,7 @@ def parallel_detect_and_align(rgb_images, detection_md, center_point,
                                 target_fs, log=False):
     if hasattr(detection_md, 'module'):
         bth_boxes, _, bth_landmarks, = detection_md.module.inference(rgb_images, 
-                                            landmark=True)
+                                        True, detection_md)
     else:
         bth_boxes, _, bth_landmarks, = detection_md.inference(rgb_images, 
                                             landmark=True)
