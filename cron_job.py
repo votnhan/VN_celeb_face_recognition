@@ -9,7 +9,7 @@ import cv2
 from datetime import datetime
 from logger import setup_logging
 from celeb_statistic import export_json_stat_dynamic_itv, export_json_stat_fixed_itv
-from utils import read_json, write_json
+from utils import read_json, write_json, load_pickle
 from demo_image import load_model_classify
 from align_face import center_point_dict
 from dotenv import load_dotenv
@@ -77,9 +77,11 @@ def export_json(args, tracker_df, frame_idxes):
     return dict_track
 
 
-def setup_device(detect_model, embedding_model, classify_models, device):
+def setup_device(detect_model, embedding_model, classify_models, emotion_model,
+                    device):
     detect_model.to(device)
     embedding_model.to(device)
+    emotion_model.to(device)
     for cls_model in classify_models:
         cls_model.to(device)
 
@@ -96,7 +98,8 @@ def write_JSON_to_DB(data, vod_id):
     return dict_content
 
 
-def while_loop(args, detect_model, embedding_model, classify_models, log_dir):
+def while_loop(args, detect_model, embedding_model, classify_models, emotion_model, 
+                log_dir):
     # logger
     logger = logging.getLogger(os.environ['LOGGER_ID'])
     # label to name DB (for demostration)
@@ -118,7 +121,8 @@ def while_loop(args, detect_model, embedding_model, classify_models, log_dir):
     gpu_idx = check_free_resource(log_dir, args.least_memory)
     if gpu_idx >= 0:
         device = 'cuda:{}'.format(gpu_idx)
-        setup_device(detect_model, embedding_model, classify_models, device)
+        setup_device(detect_model, embedding_model, classify_models, emotion_model, 
+                        device)
         logger.info('Using device {} !'.format(device))
     else:
         logger.info('Can not find any free GPU')
@@ -151,8 +155,8 @@ def while_loop(args, detect_model, embedding_model, classify_models, log_dir):
     
     logger.info('Start indexing video: {}'.format(dict_content['source_id']))
     tracker_df = main(args, detect_model, embedding_model, classify_models, 
-                    None, device, label2name_df, target_fs, center_point, 
-                    frame_idxes)
+                        emotion_model, None, device, label2name_df, target_fs, 
+                        center_point, frame_idxes)
     logger.info('End indexing video: {}'.format(dict_content['source_id']))
 
     # Set up JSON file
@@ -240,6 +244,13 @@ if __name__ == '__main__':
     emb_model = getattr(model_md, args.encoder)(**enc_args)
     logger.info('Loading embedding model {} done ...'.format(args.encoder))
 
+    # emotion model (if need)
+    if args.recog_emotion:
+        emt_args = read_json(args.emotion_args)
+        emt_model = getattr(model_md, args.emotion)(**emt_args)
+        logger.info('Loading emotion model {} is done ...'.format(args.emotion))
+
+    
     # classify from embedding model
     cls_model_paths = list(args.classify_model)
     classify_models = []
@@ -250,6 +261,6 @@ if __name__ == '__main__':
     logger.info('Loading mlp models done ...')
     
     # Process loop 
-    while_loop(args, detection_md, emb_model, classify_models, log_dir)
+    while_loop(args, detection_md, emb_model, classify_models, emt_model, log_dir)
     line = ['-']*100
     logger.info(''.join(line))

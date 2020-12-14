@@ -116,8 +116,9 @@ def find_celeb_infor_in_interval(df_for_itv, unknown_name, n_appear):
     return final_bboxes_dict, start_itv, end_itv
 
 
-def main(args, detect_model, embedding_model, classify_models, fa_model, device, 
-            label2name_df, target_fs, center_point, frame_idxes):
+def main(args, detect_model, embedding_model, classify_models, emotion_model, 
+            fa_model, device, label2name_df, target_fs, center_point, 
+            frame_idxes):
 
     if args.inference_method == 'seq_fd_vs_aln':
         box_requirements = {
@@ -126,12 +127,6 @@ def main(args, detect_model, embedding_model, classify_models, fa_model, device,
         }
     
     logger = logging.getLogger(args.logger_id)
-
-    # emotion model (if need)
-    if args.recog_emotion:
-        idx2etag = load_pickle(args.etag2idx_file)['idx2key']
-        emt_args = read_json(args.emotion_args)
-        emt_model = getattr(model_md, args.emotion)(**emt_args).to(device)
 
     # Create threshold
     if args.local_thresholds != '':
@@ -150,6 +145,9 @@ def main(args, detect_model, embedding_model, classify_models, fa_model, device,
     if args.recog_emotion:
         df_columns.append('Emotion')
     
+    # idx2key emotion
+    idx2etag = load_pickle(args.etag2idx_file)['idx2key']
+
     # Overwrite old tracker file
     with open(args.output_tracker, 'w') as tracker_file:
         tracker_file.write('')
@@ -193,8 +191,10 @@ def main(args, detect_model, embedding_model, classify_models, fa_model, device,
 
         if (processed_frame % args.log_step) == 0:
             hms_time = convert_sec_to_max_time_quantity(time_in_video)
-            logger.info('Processing for frame: {}, time: {}'.format(count, 
-                        hms_time))
+            time_point = time.time()
+            fps_now = processed_frame / (time_point - start_time)
+            logger.info('Processing for frame: {}, time: {}, fps: {:.2f}'.format(count, 
+                        hms_time, fps_now))
        
         rgb_images = []
         for frame in frames_queue:
@@ -229,7 +229,7 @@ def main(args, detect_model, embedding_model, classify_models, fa_model, device,
         if args.recog_emotion:
             map_func = np.vectorize(lambda x: idx2etag[x])
             bth_emotions, bth_probs = recognize_emotion(bth_chosen_faces, device, 
-                                    emt_model, trans_emotion_inf, map_func ,
+                                    emotion_model, trans_emotion_inf, map_func ,
                                     args.topk_emotions)
             for idx, (emotions, probs) in enumerate(zip(bth_emotions, bth_probs)):
                 draw_emotions(np_image_recogs[idx], bth_chosen_boxes[idx], 
@@ -390,17 +390,23 @@ if __name__ == '__main__':
     det_args = read_json(args.detection_args)
     detection_md = getattr(model_md, args.detection)(**det_args)
     detection_md.eval()
-    logger.info('Loading detection model {} done ...'.format(args.detection))
+    logger.info('Loading detection model {} is done ...'.format(args.detection))
 
     # face alignment model
     fa_model = face_alignment.FaceAlignment(face_alignment.LandmarksType._2D, 
                 flip_input=False, device=device)
-    logger.info('Loading face alignment model with LandmarksType done ...')
+    logger.info('Loading face alignment model with LandmarksType is done ...')
 
     # face embedding model
     enc_args = read_json(args.encoder_args)
     emb_model = getattr(model_md, args.encoder)(**enc_args)
-    logger.info('Loading embedding model {} done ...'.format(args.encoder))
+    logger.info('Loading embedding model {} is done ...'.format(args.encoder))
+
+    # emotion model (if need)
+    if args.recog_emotion:
+        emt_args = read_json(args.emotion_args)
+        emt_model = getattr(model_md, args.emotion)(**emt_args).to(device)
+        logger.info('Loading emotion model {} is done ...'.format(args.emotion))
 
     # classify from embedding model
     cls_model_paths = list(args.classify_model)
@@ -410,7 +416,7 @@ if __name__ == '__main__':
         load_model_classify(path, classify_model, args.logger_id)
         classify_models.append(classify_model)
 
-    logger.info('Loading mlp models done ...')
+    logger.info('Loading mlp models is done ...')
 
     if len(gpu_idx) > 0:
         new_cls_models = []
@@ -435,8 +441,9 @@ if __name__ == '__main__':
     frame_idxes = list(args.frame_idxes) 
     if not os.path.exists(args.output_tracker):
         logger.info('Create tracker file {} and start indexing'.format(args.output_tracker))
-        tracker_df = main(args, detection_md, emb_model, classify_models, fa_model, device, 
-                            label2name_df, target_fs, center_point, frame_idxes)
+        tracker_df = main(args, detection_md, emb_model, classify_models, emt_model, 
+                            fa_model, device, label2name_df, target_fs, 
+                            center_point, frame_idxes)
     else:
         logger.info('Re-use tracker file {}'.format(args.output_tracker))
         tracker_df = pd.read_csv(args.output_tracker)
