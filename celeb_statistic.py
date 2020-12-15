@@ -164,6 +164,8 @@ def main(args, detect_model, embedding_model, classify_models, emotion_model,
     end_video = False
     
     # Process video !
+    logger.info('Frame count: {}, fps of video: {}'.format(cap.get(7), cap.get(5)))
+    logger.info('Start reading from frame: {}'.format(count))
     while(cap.isOpened()):
         ret, frame = cap.read()
         if not ret:
@@ -217,25 +219,26 @@ def main(args, detect_model, embedding_model, classify_models, emotion_model,
         bth_names = recognize_celeb(bth_alg_faces, device, embedding_model, 
                         classify_models, transforms_default, label2name_df, threshold)
 
-        np_image_recogs = []
-        for idx, names in enumerate(bth_names):
-            if len(names) > 0:
-                img_recog = draw_boxes_on_image(frames_queue[idx], 
-                                bth_chosen_boxes[idx], names)
-            else:
-                img_recog = frames_queue[idx]
-            np_image_recogs.append(img_recog)
-
         if args.recog_emotion:
             map_func = np.vectorize(lambda x: idx2etag[x])
             bth_emotions, bth_probs = recognize_emotion(bth_chosen_faces, device, 
                                     emotion_model, trans_emotion_inf, map_func ,
                                     args.topk_emotions)
+
+        if args.save_frame_recognized:
+            np_image_recogs = []
+            for idx, names in enumerate(bth_names):
+                if len(names) > 0:
+                    img_recog = draw_boxes_on_image(frames_queue[idx], 
+                                    bth_chosen_boxes[idx], names)
+                else:
+                    img_recog = frames_queue[idx]
+                np_image_recogs.append(img_recog)
+
             for idx, (emotions, probs) in enumerate(zip(bth_emotions, bth_probs)):
                 draw_emotions(np_image_recogs[idx], bth_chosen_boxes[idx], 
                                 emotions, probs)
 
-        if args.save_frame_recognized:
             for idx, recog_img in enumerate(np_image_recogs):
                 image_name = 'frame_{}.png'.format(frames_info[idx][1])
                 image_path = os.path.join(args.output_frame, image_name)
@@ -284,6 +287,7 @@ def main(args, detect_model, embedding_model, classify_models, emotion_model,
     fps_process = int(processed_frame / processed_time)
     cap.release()
     logger.info('Saved tracker file in {} ...'.format(args.output_tracker))
+    logger.info('Indexing time: {:.2f} ...'.format(processed_time))
     logger.info('FPS for face and emotion recognition: {}'.format(fps_process))
     tracked_df = pd.read_csv(args.output_tracker)
     return tracked_df
