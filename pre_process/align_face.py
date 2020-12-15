@@ -164,7 +164,7 @@ if __name__ == '__main__':
     args_parser.add_argument('-od', '--output_dir', default='align_output', 
                                 type=str)
     args_parser.add_argument('-as', '--aligned_size', nargs='+', type=int)
-    args_parser.add_argument('-nf', '--un_face_file', default='unknown.txt', 
+    args_parser.add_argument('-nf', '--no_face_file', default='no_face.txt', 
                                 type=str)
     args_parser.add_argument('-dv', '--device', default='cuda:0', type=str)
     args_parser.add_argument('--output_log', default='align_log', type=str)   
@@ -184,7 +184,7 @@ if __name__ == '__main__':
     aligned_size = tuple(args.aligned_size)
     center_point = center_point_dict[str(aligned_size)]
     path_log = Path(log_dir)
-    unknown_file = open(str(path_log / args.un_face_file), 'w')
+    unknown_file = open(str(path_log / args.no_face_file), 'w')
 
     align_face(args.input_dir, args.output_dir, aligned_size, fa_model, 
                     center_point, unknown_file)

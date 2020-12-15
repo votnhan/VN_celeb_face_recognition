@@ -73,7 +73,7 @@ def crop_face(model, rgb_image):
     return face, len(bboxes)
 
 
-def crop_face_dataset(input_dir, output_dir, detection_md, unknown_file, 
+def crop_face_dataset(input_dir, output_dir, detection_md, no_face_file, 
                 many_boxes_file, align_params=None):
     logger = logging.getLogger(os.environ['LOGGER_ID'])
     n_no_face, many_boxes, total = 0, 0, 0
@@ -104,7 +104,7 @@ def crop_face_dataset(input_dir, output_dir, detection_md, unknown_file,
             many_boxes += 1
             continue
         elif n_faces < 1:
-            unknown_file.write(img_path + '\n')
+            no_face_file.write(img_path + '\n')
             n_no_face += 1
             continue
 
@@ -123,7 +123,7 @@ if __name__ == '__main__':
     args_parser.add_argument('-id', '--input_dir', default='data', type=str)
     args_parser.add_argument('-od', '--output_dir', default='crop_output', 
                                 type=str)
-    args_parser.add_argument('-nf', '--un_face_file', default='unknown.txt', 
+    args_parser.add_argument('-nf', '--no_face_file', default='no_face.txt', 
                                 type=str)
     args_parser.add_argument('-mf', '--many_boxes_file', default='many_boxes.txt', 
                                 type=str)    
@@ -152,7 +152,7 @@ if __name__ == '__main__':
 
     # tracker file 
     path_log = Path(log_dir) 
-    unknown_file = open(str(path_log / args.un_face_file), 'w')
+    no_face_file = open(str(path_log / args.no_face_file), 'w')
     many_boxes_file = open(str(path_log / args.many_boxes_file) , 'w')
 
     # face alignment params
@@ -163,7 +163,7 @@ if __name__ == '__main__':
         align_params = {'center_point': center_point, 'target_fs': target_fs}
         logger.info('Detect and align parallel')
 
-    crop_face_dataset(args.input_dir, args.output_dir, detection_md, unknown_file, 
+    crop_face_dataset(args.input_dir, args.output_dir, detection_md, no_face_file, 
                 many_boxes_file, align_params)
 
     unknown_file.close()
