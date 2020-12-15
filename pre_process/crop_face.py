@@ -1,14 +1,21 @@
+import sys
+sys.path.append('./')
 import argparse
 import os
 import glob
 import models as model_md
 import cv2
 import pandas as pd
+import logging
 from utils import read_json
 from pathlib import Path
 from demo_image import move_landmark_to_box, alignment
 from align_face import center_point_dict
+from dotenv import load_dotenv
+from logger import get_logger_for_run
+from pathlib import Path
 
+load_dotenv()
 
 def find_area(box):
     w = box[2] - box[0]
@@ -67,22 +74,22 @@ def crop_face(model, rgb_image):
 
 
 def crop_face_dataset(input_dir, output_dir, detection_md, unknown_file, 
-                many_boxes_file, label_file, align_params=None):
+                many_boxes_file, align_params=None):
+    logger = logging.getLogger(os.environ['LOGGER_ID'])
     n_no_face, many_boxes, total = 0, 0, 0
     img_files = os.listdir(input_dir)
     img_files.sort()
     n_images = len(img_files)
     input_dir = Path(input_dir)
     output_dir = Path(output_dir)
-    label_list = []
     for idx, img_file in enumerate(img_files):
         total += 1
-        print('---------{}/{}---------'.format(idx, n_images))
+        logger.info('---------{}/{}---------'.format(idx, n_images))
         output_path = str(output_dir / img_file)
         if os.path.exists(output_path):
             continue
         img_path = str(input_dir / img_file)
-        print('Processing {}'.format(img_path))
+        logger.info('Processing {}'.format(img_path))
         bgr_img = cv2.imread(img_path)
         rgb_img = cv2.cvtColor(bgr_img, cv2.COLOR_BGR2RGB)
 
@@ -103,24 +110,18 @@ def crop_face_dataset(input_dir, output_dir, detection_md, unknown_file,
 
         bgr_face = cv2.cvtColor(face, cv2.COLOR_RGB2BGR)
         cv2.imwrite(output_path, bgr_face)
-        print('Finding face for {} is done ...'.format(img_file))
-        label = img_file.split('_')[0]
-        label_list.append((img_file, int(label)))
+        logger.info('Finding face for {} is done ...'.format(img_file))
 
-    label_df = pd.DataFrame(data=label_list, columns=['image', 'label'])
-    label_df.to_csv(label_file, index=False)
-    print('Saved label file {}.'.format(label_file))
-
-    print('Total images: {}.'.format(total))
-    print('No face images: {}.'.format(n_no_face))
-    print('Many face images: {}.'.format(many_boxes))
+    logger.info('Total images: {}.'.format(total))
+    logger.info('No face images: {}.'.format(n_no_face))
+    logger.info('Many face images: {}.'.format(many_boxes))
 
 
 if __name__ == '__main__':
     args_parser = argparse.ArgumentParser(description='Face alignment to \
                             specific size by landmarks detection model')
-    args_parser.add_argument('-id', '--input_dir', default='test', type=str)
-    args_parser.add_argument('-od', '--output_dir', default='test_aligned', 
+    args_parser.add_argument('-id', '--input_dir', default='data', type=str)
+    args_parser.add_argument('-od', '--output_dir', default='crop_output', 
                                 type=str)
     args_parser.add_argument('-nf', '--un_face_file', default='unknown.txt', 
                                 type=str)
@@ -130,12 +131,17 @@ if __name__ == '__main__':
     args_parser.add_argument('-det', '--detection', default='MTCNN', type=str)
     args_parser.add_argument('-dargs', '--detection_args', 
                                 default='cfg/detection/mtcnn.json', type=str)
-    args_parser.add_argument('--label_file', default='VN_celeb.csv', type=str)
     args_parser.add_argument('--align', action='store_true')
     args_parser.add_argument('-tg_fs', '--target_face_size', default=112, 
                                 type=int)
+    args_parser.add_argument('--output_log', default='crop_log', type=str)   
     
     args = args_parser.parse_args()
+    logger, log_dir = get_logger_for_run(args.output_log)
+    logger.info('Crop faces from folder {}'.format(args.input_dir))
+    for k, v in args.__dict__.items():
+        logger.info('--{}: {}'.format(k, v))
+
     if not os.path.exists(args.output_dir):
         os.makedirs(args.output_dir)
     
@@ -145,8 +151,9 @@ if __name__ == '__main__':
     detection_md.eval()
 
     # tracker file 
-    unknown_file = open(args.un_face_file, 'w')
-    many_boxes_file = open(args.many_boxes_file, 'w')
+    path_log = Path(log_dir) 
+    unknown_file = open(str(path_log / args.un_face_file), 'w')
+    many_boxes_file = open(str(path_log / args.many_boxes_file) , 'w')
 
     # face alignment params
     align_params = None
@@ -154,9 +161,10 @@ if __name__ == '__main__':
         target_fs = (args.target_face_size, args.target_face_size)
         center_point = center_point_dict[str(target_fs)]
         align_params = {'center_point': center_point, 'target_fs': target_fs}
+        logger.info('Detect and align parallel')
 
     crop_face_dataset(args.input_dir, args.output_dir, detection_md, unknown_file, 
-                many_boxes_file, args.label_file, align_params)
+                many_boxes_file, align_params)
 
     unknown_file.close()
     many_boxes_file.close()

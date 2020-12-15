@@ -30,7 +30,7 @@ from demo_image import find_embedding, identify_person, \
                         parallel_detect_and_align
 
 from imgaug import augmenters as iaa
-from align_face import alignment, center_point_dict
+from pre_process import alignment, center_point_dict
 from data_loader import transforms_default, trans_emotion_inf
 from utils import convert_sec_to_max_time_quantity
 from logger import setup_logging
@@ -371,7 +371,7 @@ if __name__ == '__main__':
     if not os.path.exists(log_dir):
         os.makedirs(log_dir)
     setup_logging(log_dir)
-    logger = logging.getLogger(args.logger_id)
+    logger = logging.getLogger(os.environ['LOGGER_ID'])
     logger.info('Setup logger in directory: {}'.format(log_dir))
     logger.info('Running argument parameters: ')
     for k, v in args.__dict__.items():

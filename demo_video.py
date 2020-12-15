@@ -18,7 +18,7 @@ from demo_image import  draw_boxes_on_image, load_model_classify, \
                         sequential_detect_and_align, \
                         parallel_detect_and_align
 from imgaug import augmenters as iaa
-from align_face import alignment, center_point_dict
+from pre_process import alignment, center_point_dict
 from data_loader import transforms_default, trans_emotion_inf
 
 

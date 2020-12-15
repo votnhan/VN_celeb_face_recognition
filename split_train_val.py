@@ -1,11 +1,17 @@
 import pandas as pd
 import numpy as np
 import argparse
+import logging
+import os
 from pathlib import Path
 from utils import read_json, write_json
+from dotenv import load_dotenv
+from logger import get_logger_for_run
 
+load_dotenv()
 
 def create_file_describe_ds(describe_file, output_file):
+    logger = logging.getLogger(os.environ['LOGGER_ID'])
     df_label = pd.read_csv(describe_file)
     labels = np.unique(df_label['label'])
     dict_labels = {}
@@ -17,7 +23,7 @@ def create_file_describe_ds(describe_file, output_file):
         label_2_seq_dict[str(idx)] = str(i)
     
     write_json(output_file, dict_labels)
-    print('Created {} for describe VN_celeb ...'.format(output_file))
+    logger.info('Created {} for describe VN_celeb ...'.format(output_file))
     return dict_labels, label_2_seq_dict
 
 
@@ -44,6 +50,20 @@ def remap_sequence_key(label_dict):
     return remap_dict
 
 
+def get_label_from_dataset(root_dir, label_file):
+    logger = logging.getLogger(os.environ['LOGGER_ID'])
+    images = os.listdir(root_dir)
+    images.sort()
+    label_items = []
+    for img_file in images:
+        label = img_file.split('_')[0]
+        label_items.append((img_file, int(label)))
+    
+    label_df = pd.DataFrame(data=label_items, columns=['image', 'label'])
+    label_df.to_csv(label_file, index=False)
+    logger.info('Saved label file {}.'.format(label_file))
+
+
 if __name__ == "__main__":
     args_parser = argparse.ArgumentParser(description='Split training \
                     and validation set for VN celeb dataset')
@@ -58,11 +78,19 @@ if __name__ == "__main__":
     args_parser.add_argument('-v', '--val_file', default='val.json')
     args_parser.add_argument('--remap_key', action='store_true')
     args_parser.add_argument('--n_samples_val', default=1, type=int)
+    args_parser.add_argument('--output_log', default='split_log', type=str)   
+    args_parser.add_argument('--root_dir', default='data', type=str)
 
     args = args_parser.parse_args()
-    
+    logger, log_dir = get_logger_for_run(args.output_log)
+
+    if not os.path.exists(args.describe_file):
+        logger.info('Create celeb description file from {}'.format(args.root_dir))
+        get_label_from_dataset(args.root_dir, args.describe_file)
+
     dict_labels, label_2_seq_dict = create_file_describe_ds(args.describe_file, 
                                         args.out_dict_labels)
+
     write_json(args.label_2_seq, label_2_seq_dict, log=True)
     dict_train, dict_val = split_train_val(args.out_dict_labels, 
                                 args.train_file, args.val_file, 

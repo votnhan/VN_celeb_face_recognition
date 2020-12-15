@@ -1,7 +1,7 @@
 from utils import read_image, read_json, load_pickle
 from PIL import Image
 from collections import Counter
-from align_face import alignment, center_point_dict
+from pre_process import alignment, center_point_dict
 from data_loader import transforms_default, trans_emotion_inf
 from imgaug import augmenters as iaa
 from torch.nn import functional as F
