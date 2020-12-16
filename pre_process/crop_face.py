@@ -134,9 +134,12 @@ if __name__ == '__main__':
     args_parser.add_argument('--align', action='store_true')
     args_parser.add_argument('-tg_fs', '--target_face_size', default=112, 
                                 type=int)
-    args_parser.add_argument('--output_log', default='crop_log', type=str)   
+    args_parser.add_argument('--output_log', default='crop_log', type=str)
+    args_parser.add_argument('--root_output', default='temp_data', type=str)
     
     args = args_parser.parse_args()
+    args.output_log = os.path.join(args.root_output, args.output_log)
+    args.output_dir = os.path.join(args.root_output, args.output_dir)
     logger, log_dir = get_logger_for_run(args.output_log)
     logger.info('Crop faces from folder {}'.format(args.input_dir))
     for k, v in args.__dict__.items():
@@ -166,5 +169,5 @@ if __name__ == '__main__':
     crop_face_dataset(args.input_dir, args.output_dir, detection_md, no_face_file, 
                 many_boxes_file, align_params)
 
-    unknown_file.close()
+    no_face_file.close()
     many_boxes_file.close()

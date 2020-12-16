@@ -38,12 +38,29 @@ def convert_folder_2_flatten(root_dir, output_dir, wrong_format):
             continue
         new_image_file = '{}_{}.{}'.format(label, image_name, ext)
         new_img_path = os.path.join(output_dir, new_image_file)
-        shutil.copyfile(image_path, new_img_path)
+        if not os.path.exists(new_img_path):
+            shutil.copyfile(image_path, new_img_path)
 
     print('Samples wrong format: {}'.format(wrong_format_counter))
 
 
-if __name__ == '__name__':
+def choose_straight_face(flatten_dir, straight_dir):
+    logger = logging.getLogger(os.environ['LOGGER_ID'])
+    path_pt = flatten_dir + '/*'
+    img_paths = glob.glob(path_pt)
+    img_paths.sort()
+    n_images = len(img_paths)
+    for idx, img_path in enumerate(img_paths):
+        img_file = img_path.split('/')[-1]
+        img_name, _ = img_file.split('.')
+        if 'a' in img_name.lower():
+            new_img_path = os.path.join(straight_dir, img_file)
+            logger.info('{}/{}, Copying straight face {}'.format(idx, n_images, 
+                            img_path))
+            shutil.copy(img_path, new_img_path)
+
+
+if __name__ == '__main__':
     args_parser = argparse.ArgumentParser(description='Convert folder \
                     structure dataset to flatten dataset')
     
@@ -52,11 +69,27 @@ if __name__ == '__name__':
     args_parser.add_argument('--output_log', default='flatten_log', type=str)
     args_parser.add_argument('--wrong_format', default='wrong_format.txt', 
                                 type=str)
+    args_parser.add_argument('--root_output', default='temp_data', type=str)
+    args_parser.add_argument('--choose_straight', action='store_true')
+    args_parser.add_argument('--straight_dir', default='straight_faces', type=str)
     
     args = args_parser.parse_args() 
+    args.output_log = os.path.join(args.root_output, args.output_log)
+    args.output_dir = os.path.join(args.root_output, args.output_dir)
+    args.straight_dir = os.path.join(args.root_output, args.straight_dir)
 
     logger, log_dir = get_logger_for_run(args.output_log)
     path_log = Path(log_dir)
     wrong_format = open(str(path_log / args.wrong_format), 'w')
+    logger.info('Start convert dataset structure')
     convert_folder_2_flatten(args.root_dir, args.output_dir, wrong_format)
     wrong_format.close()
+    logger.info('End convert dataset structure')
+
+    if args.choose_straight:
+        if not os.path.exists(args.straight_dir):
+            os.makedirs(args.straight_dir)
+        logger.info('Choosing straight faces !')
+        choose_straight_face(args.output_dir, args.straight_dir)
+        logger.info('Choosing straight faces is done')
+

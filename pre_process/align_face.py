@@ -78,7 +78,7 @@ def face_image_from_landmarks(center_points, dst, img_rgb, output_dir,
 
 
 def align_face(input_dir, output_dir, aligned_size, fa_model, center_points, 
-                unknown_file):
+                no_face_file):
 
     logger = logging.getLogger(os.environ['LOGGER_ID'])
     n_no_face = 0
@@ -145,7 +145,7 @@ def align_face(input_dir, output_dir, aligned_size, fa_model, center_points,
         if not have_face:
             n_no_face += 1
             logger.info('{} has no face'.format(img_path))
-            unknown_file.write(img_path + '\n')
+            no_face_file.write(img_path + '\n')
             face_resized = cv2.resize(bgr_image, aligned_size, 
                                         interpolation=cv2.INTER_CUBIC)
             output_path = str(output_dir / img_file)
@@ -167,9 +167,12 @@ if __name__ == '__main__':
     args_parser.add_argument('-nf', '--no_face_file', default='no_face.txt', 
                                 type=str)
     args_parser.add_argument('-dv', '--device', default='cuda:0', type=str)
-    args_parser.add_argument('--output_log', default='align_log', type=str)   
+    args_parser.add_argument('--output_log', default='align_log', type=str)
+    args_parser.add_argument('--root_output', default='temp_data', type=str)   
     
     args = args_parser.parse_args()
+    args.output_log = os.path.join(args.root_output, args.output_log)
+    args.output_dir = os.path.join(args.root_output, args.output_dir)
     logger, log_dir = get_logger_for_run(args.output_log)
     logger.info('Align faces from folder {}'.format(args.input_dir))
     for k, v in args.__dict__.items():
@@ -184,8 +187,10 @@ if __name__ == '__main__':
     aligned_size = tuple(args.aligned_size)
     center_point = center_point_dict[str(aligned_size)]
     path_log = Path(log_dir)
-    unknown_file = open(str(path_log / args.no_face_file), 'w')
+    no_face_file = open(str(path_log / args.no_face_file), 'w')
 
+    logger.info('Start face alignment')
     align_face(args.input_dir, args.output_dir, aligned_size, fa_model, 
-                    center_point, unknown_file)
-    unknown_file.close()
+                    center_point, no_face_file)
+    no_face_file.close()
+    logger.info('End face alignment')
