@@ -35,6 +35,7 @@ from data_loader import transforms_default, trans_emotion_inf
 from utils import convert_sec_to_max_time_quantity
 from logger import setup_logging
 from dotenv import load_dotenv
+from db import CelebDB, EmotionDB
 
 load_dotenv()
 
@@ -117,7 +118,7 @@ def find_celeb_infor_in_interval(df_for_itv, unknown_name, n_appear):
 
 
 def main(args, detect_model, embedding_model, classify_models, emotion_model, 
-            fa_model, device, label2name_df, target_fs, center_point, 
+            fa_model, device, celeb_db, emotion_db, target_fs, center_point, 
             frame_idxes):
 
     if args.inference_method == 'seq_fd_vs_aln':
@@ -212,17 +213,16 @@ def main(args, detect_model, embedding_model, classify_models, emotion_model,
             bth_alg_faces, bth_chosen_boxes, bth_chosen_faces = parallel_detect_and_align(rgb_images, 
                                                         detect_model, center_point, target_fs, False)
         else:
-            logger.info('Do not support {} method.'.format(args.args.inference_method))
+            logger.info('Do not support {} method.'.format(args.inference_method))
             break
 
 
         bth_names = recognize_celeb(bth_alg_faces, device, embedding_model, 
-                        classify_models, transforms_default, label2name_df, threshold)
+                        classify_models, transforms_default, celeb_db, threshold)
 
         if args.recog_emotion:
-            map_func = np.vectorize(lambda x: idx2etag[x])
             bth_emotions, bth_probs = recognize_emotion(bth_chosen_faces, device, 
-                                    emotion_model, trans_emotion_inf, map_func ,
+                                    emotion_model, trans_emotion_inf, emotion_db,
                                     args.topk_emotions)
 
         if args.save_frame_recognized:
@@ -307,6 +307,8 @@ if __name__ == '__main__':
     args_parser.add_argument('-m', '--classify_model', nargs='+', type=str)
     args_parser.add_argument('-l2n', '--label2name', default='label2name.csv', 
                                 type=str)
+    args_parser.add_argument('--alias2main_id', default='alias2main_id.json', 
+                                type=str)
     args_parser.add_argument('-dv', '--device', default='cuda:0', type=str) 
     args_parser.add_argument('-id', '--input_dim_emb', default=512, type=int) 
     args_parser.add_argument('-nc', '--num_classes', default=1001, type=int)
@@ -387,9 +389,10 @@ if __name__ == '__main__':
     if args.multi_gpus_idx is not None:
         gpu_idx = list(args.multi_gpus_idx)
 
-    # Prepare 3 models, database for label to name
-    label2name_df = pd.read_csv(args.label2name)
-    
+    # Database for label to name
+    celeb_db = CelebDB(args.label2name, args.alias2main_id)
+
+    # Prepare 3 models
     # face detection model
     det_args = read_json(args.detection_args)
     detection_md = getattr(model_md, args.detection)(**det_args)
@@ -407,10 +410,14 @@ if __name__ == '__main__':
     logger.info('Loading embedding model {} is done ...'.format(args.encoder))
 
     # emotion model (if need)
+    emotion_db = None
     if args.recog_emotion:
+        # Database for emotion
+        emotion_db = EmotionDB(args.etag2idx_file)
         emt_args = read_json(args.emotion_args)
         emt_model = getattr(model_md, args.emotion)(**emt_args).to(device)
         logger.info('Loading emotion model {} is done ...'.format(args.emotion))
+    
 
     # classify from embedding model
     cls_model_paths = list(args.classify_model)
@@ -446,7 +453,7 @@ if __name__ == '__main__':
     if not os.path.exists(args.output_tracker):
         logger.info('Create tracker file {} and start indexing'.format(args.output_tracker))
         tracker_df = main(args, detection_md, emb_model, classify_models, emt_model, 
-                            fa_model, device, label2name_df, target_fs, 
+                            fa_model, device, celeb_db, emotion_db, target_fs, 
                             center_point, frame_idxes)
     else:
         logger.info('Re-use tracker file {}'.format(args.output_tracker))

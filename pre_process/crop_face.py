@@ -7,6 +7,7 @@ import models as model_md
 import cv2
 import pandas as pd
 import logging
+import shutil
 from utils import read_json
 from pathlib import Path
 from demo_image import move_landmark_to_box, alignment
@@ -117,12 +118,25 @@ def crop_face_dataset(input_dir, output_dir, detection_md, no_face_file,
     logger.info('Many face images: {}.'.format(many_boxes))
 
 
+def copy_fail_images(tracker_file, output_dir):
+    tracker_file_obj = open(tracker_file, 'r')
+    for line in tracker_file_obj.readlines():
+        img_path = line[:-1]
+        logger.info('Copying image {}'.format(img_path))
+        img_file = img_path.split('/')[-1]
+        new_path = os.path.join(output_dir, img_file)
+        shutil.copy(img_path, new_path)
+
+
 if __name__ == '__main__':
     args_parser = argparse.ArgumentParser(description='Face alignment to \
                             specific size by landmarks detection model')
     args_parser.add_argument('-id', '--input_dir', default='data', type=str)
     args_parser.add_argument('-od', '--output_dir', default='crop_output', 
                                 type=str)
+    args_parser.add_argument('--many_faces_dir', default='many_faces', type=str)
+    args_parser.add_argument('--no_face_dir', default='no_face', type=str)
+    args_parser.add_argument('--collect_fail_face', action='store_true')
     args_parser.add_argument('-nf', '--no_face_file', default='no_face.txt', 
                                 type=str)
     args_parser.add_argument('-mf', '--many_boxes_file', default='many_boxes.txt', 
@@ -171,3 +185,21 @@ if __name__ == '__main__':
 
     no_face_file.close()
     many_boxes_file.close()
+
+    if args.collect_fail_face:
+        logger.info('Start collecting non-face images')
+        args.no_face_dir = os.path.join(args.root_output, args.no_face_dir)
+        if not os.path.exists(args.no_face_dir):
+            os.makedirs(args.no_face_dir)
+        no_face_path = str(path_log / args.no_face_file)
+        copy_fail_images(no_face_path, args.no_face_dir)
+        logger.info('End collecting non-face images')
+
+        logger.info('Start collecting many face images')
+        args.many_faces_dir = os.path.join(args.root_output, args.many_faces_dir)
+        if not os.path.exists(args.many_faces_dir):
+            os.makedirs(args.many_faces_dir)
+        many_faces_path = str(path_log / args.many_boxes_file)
+        copy_fail_images(many_faces_path, args.many_faces_dir)
+        logger.info('End collecting many face images')
+

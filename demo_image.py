@@ -5,6 +5,7 @@ from pre_process import alignment, center_point_dict
 from data_loader import transforms_default, trans_emotion_inf
 from imgaug import augmenters as iaa
 from torch.nn import functional as F
+from db import CelebDB, EmotionDB
 import torch
 import cv2
 import argparse
@@ -51,7 +52,7 @@ def find_emotion(image_tensor, emotion_model, topk=6):
 
 
 def recognize_celeb(bth_alg_face_list, device, emb_model, classify_models, 
-                        transforms, label2name_df, threshold):
+                        transforms, celeb_db, threshold):
     alg_face_list = []
     for x in bth_alg_face_list:
         alg_face_list += x
@@ -67,8 +68,7 @@ def recognize_celeb(bth_alg_face_list, device, emb_model, classify_models,
         embeddings = find_embedding(aligned_faces_tf.to(device), emb_model)
         list_names = []
         for cls_model in classify_models:
-            names = identify_person(embeddings, cls_model, label2name_df, 
-                                        threshold)
+            names = identify_person(embeddings, cls_model, celeb_db, threshold)
             list_names.append(names)
         ens_results = list(zip(*list_names))
         
@@ -89,7 +89,7 @@ def recognize_celeb(bth_alg_face_list, device, emb_model, classify_models,
 
 
 def recognize_emotion(bth_faces_list, device, emt_model, transforms, 
-                        map_label_func, topk=6):
+                        emotion_db, topk=6):
     alg_face_list = []
     for x in bth_faces_list:
         alg_face_list += x
@@ -109,7 +109,8 @@ def recognize_emotion(bth_faces_list, device, emt_model, transforms,
         counter = 0
         for n_face in n_faces_4_image:
             if n_face > 0:
-                emotions = map_label_func(emotions_cls[counter: counter + n_face])
+                emotions_pred = emotions_cls[counter: counter + n_face]
+                emotions = emotion_db.map_func(emotions_pred)
             else:
                 emotions = []
             bth_emotions.append(emotions)
@@ -122,7 +123,7 @@ def recognize_emotion(bth_faces_list, device, emt_model, transforms,
     return bth_emotions, bth_probs
 
 
-def identify_person(embeddings, classify_model, name_df, threshold):
+def identify_person(embeddings, classify_model, celeb_db, threshold):
     classify_model.eval()
     with torch.no_grad():
         output = classify_model(embeddings)
@@ -148,14 +149,7 @@ def identify_person(embeddings, classify_model, name_df, threshold):
         else:
             filtered_preditions.append(output.size(1))
             
-    list_names = []
-    for pred in filtered_preditions:
-        name = list(name_df['name'][name_df['label'] == pred])
-        if len(name) > 0:
-            list_names.append(name[0])
-        else:
-            list_names.append('Unknown')
-
+    list_names = celeb_db.get_id_of_celeb(filtered_preditions)
     return list_names
 
 
@@ -337,6 +331,8 @@ if __name__ == '__main__':
     args_parser.add_argument('-m', '--classify_model', nargs='+', type=str)
     args_parser.add_argument('-l2n', '--label2name', default='label2name.csv', 
                                 type=str)
+    args_parser.add_argument('--alias2main_id', default='alias2main_id.json', 
+                                type=str)
     args_parser.add_argument('-w', '--pre_trained_emb', default='vggface2', 
                                 type=str)
     args_parser.add_argument('-dv', '--device', default='cuda:0', type=str) 
@@ -372,8 +368,10 @@ if __name__ == '__main__':
 
     device = args.device
     
-    # Prepare 3 models, database for label to name
-    label2name_df = pd.read_csv(args.label2name)
+    # Database for label to name
+    celeb_db = CelebDB(args.label2name, args.alias2main_id)
+    
+    # Prepare 3 models
     # face detection model
     det_args = read_json(args.detection_args)
     detection_md = getattr(model_md, args.detection)(**det_args)
@@ -398,8 +396,10 @@ if __name__ == '__main__':
         classify_models.append(classify_model)
 
     # emotion model (if need)
+    emotion_db = None
     if args.recog_emotion:
-        idx2etag = load_pickle(args.etag2idx_file)['idx2key']
+        # Database for emotion
+        emotion_db = EmotionDB(args.etag2idx_file)
         emt_args = read_json(args.emotion_args)
         emt_model = getattr(model_md, args.emotion)(**emt_args).to(device)
 
@@ -428,17 +428,15 @@ if __name__ == '__main__':
     
 
     bth_names = recognize_celeb(bth_alg_faces, device, emb_model, 
-                classify_models, transforms_default, label2name_df, 
-                    args.recog_threshold)
+                classify_models, transforms_default, celeb_db, args.recog_threshold)
 
     names = bth_names[0]
     chosen_boxes = bth_chosen_boxes[0]
     np_image_recog = draw_boxes_on_image(np_image, chosen_boxes, names)
 
     if args.recog_emotion:
-        map_func = np.vectorize(lambda x: idx2etag[x])
         bth_emotions, bth_probs = recognize_emotion(bth_alg_faces, device, 
-                                emt_model, trans_emotion_inf, map_func, 
+                                emt_model, trans_emotion_inf, emotion_db, 
                                 args.topk_emotions)
         np_image_recog = draw_emotions(np_image_recog, chosen_boxes, 
                             bth_emotions[0], bth_probs[0])

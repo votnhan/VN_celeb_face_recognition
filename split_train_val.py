@@ -76,34 +76,40 @@ if __name__ == "__main__":
                                 type=str)
     args_parser.add_argument('-tr', '--train_file', default='train.json')
     args_parser.add_argument('-v', '--val_file', default='val.json')
-    args_parser.add_argument('--remap_key', action='store_true')
     args_parser.add_argument('--n_samples_val', default=1, type=int)
     args_parser.add_argument('--output_log', default='split_log', type=str)   
     args_parser.add_argument('--root_dir', default='data', type=str)
+    args_parser.add_argument('--root_output', default='temp_data', type=str)
 
     args = args_parser.parse_args()
+    root_output = Path(args.root_output)
+    args.describe_file = str(root_output / args.describe_file)
+    args.out_dict_labels = str(root_output / args.out_dict_labels)
+    args.label_2_seq = str(root_output / args.label_2_seq)
+    args.train_file = str(root_output / args.train_file)
+    args.val_file = str(root_output / args.val_file)
+    args.output_log = str(root_output / args.output_log)
+
     logger, log_dir = get_logger_for_run(args.output_log)
+    logger.info('Split train and val set')
+    for k, v in args.__dict__.items():
+        logger.info('--{}: {}'.format(k, v))
 
     if not os.path.exists(args.describe_file):
-        logger.info('Create celeb description file from {}'.format(args.root_dir))
+        logger.info('Create celeb description csv file from {}'.format(args.root_dir))
         get_label_from_dataset(args.root_dir, args.describe_file)
 
+    logger.info('Create JSON description of label')
     dict_labels, label_2_seq_dict = create_file_describe_ds(args.describe_file, 
                                         args.out_dict_labels)
+    seq_key_dict_labels = remap_sequence_key(dict_labels)
 
+    logger.info('Writing JSON mapping between not sequent ID and sequent ID')
     write_json(args.label_2_seq, label_2_seq_dict, log=True)
-    dict_train, dict_val = split_train_val(args.out_dict_labels, 
-                                args.train_file, args.val_file, 
-                                args.n_samples_val)
-    
-    if args.remap_key:
-        seq_key_dict_labels = remap_sequence_key(dict_labels)
-        seq_key_dict_train = remap_sequence_key(dict_train)
-        seq_key_dict_val = remap_sequence_key(dict_val)
-        write_json('{}_remap.json'.format(args.describe_file.split('.')[0]), 
-                    seq_key_dict_labels)
-        write_json('{}_remap.json'.format(args.train_file.split('.')[0]), 
-                    seq_key_dict_train)
-        write_json('{}_remap.json'.format(args.val_file.split('.')[0]), 
-                    seq_key_dict_val)       
+    logger.info('Writing JSON describing dataset with sequentially classes')
+    write_json(args.out_dict_labels, seq_key_dict_labels, log=True)
 
+    logger.info('Splitting train and val set')
+    dict_train, dict_val = split_train_val(args.out_dict_labels, args.train_file, 
+                                args.val_file, args.n_samples_val)
+     

@@ -20,6 +20,7 @@ from demo_image import  draw_boxes_on_image, load_model_classify, \
 from imgaug import augmenters as iaa
 from pre_process import alignment, center_point_dict
 from data_loader import transforms_default, trans_emotion_inf
+from db import CelebDB, EmotionDB
 
 
 def export_video_face_recognition(output_frame_dir, fps, output_path):
@@ -44,7 +45,7 @@ def export_video_face_recognition(output_frame_dir, fps, output_path):
         
 
 def main(args, detect_model, embedding_model, classify_models, fa_model, device, 
-            label2name_df, target_fs, center_point):
+            celeb_db, target_fs, center_point):
     
     if not os.path.exists(args.output_frame):
         os.makedirs(args.output_frame)
@@ -59,7 +60,8 @@ def main(args, detect_model, embedding_model, classify_models, fa_model, device,
     
     # emotion model (if need)
     if args.recog_emotion:
-        idx2etag = load_pickle(args.etag2idx_file)['idx2key']
+        # Database for emotion
+        emotion_db = EmotionDB(args.etag2idx_file)
         emt_args = read_json(args.emotion_args)
         emt_model = getattr(model_md, args.emotion)(**emt_args).to(device)
 
@@ -126,7 +128,7 @@ def main(args, detect_model, embedding_model, classify_models, fa_model, device,
         bth_names = recognize_celeb(bth_alg_faces, device, 
                                 emb_model, classify_models, 
                                 transforms_default, 
-                                label2name_df, args.recog_threshold)
+                                celeb_db, args.recog_threshold)
 
         np_image_recogs = []
         for idx, names in enumerate(bth_names):
@@ -138,9 +140,8 @@ def main(args, detect_model, embedding_model, classify_models, fa_model, device,
             np_image_recogs.append(img_recog)
 
         if args.recog_emotion:
-            map_func = np.vectorize(lambda x: idx2etag[x])
             bth_emotions, bth_probs = recognize_emotion(bth_chosen_faces, device, 
-                                    emt_model, trans_emotion_inf, map_func ,
+                                    emt_model, trans_emotion_inf, emotion_db,
                                     args.topk_emotions)
             for idx, (emotions, probs) in enumerate(zip(bth_emotions, bth_probs)):
                 draw_emotions(np_image_recogs[idx], bth_chosen_boxes[idx], 
@@ -213,6 +214,8 @@ if __name__ == '__main__':
     args_parser.add_argument('-m', '--classify_model', nargs='+', type=str)
     args_parser.add_argument('-l2n', '--label2name', default='label2name.csv', 
                                 type=str)
+    args_parser.add_argument('--alias2main_id', default='alias2main_id.json', 
+                                type=str)
     args_parser.add_argument('-w', '--pre_trained_emb', default='vggface2', 
                                 type=str)
     args_parser.add_argument('-dv', '--device', default='cuda:0', type=str) 
@@ -250,9 +253,10 @@ if __name__ == '__main__':
 
     device = args.device
 
-    # Prepare 3 models, database for label to name
-    label2name_df = pd.read_csv(args.label2name)
+    # Database for label to name
+    celeb_db = CelebDB(args.label2name, args.alias2main_id)
     
+    # Prepare 3 models, 
     # face detection model
     det_args = read_json(args.detection_args)
     detection_md = getattr(model_md, args.detection)(**det_args)
@@ -280,7 +284,7 @@ if __name__ == '__main__':
     center_point = center_point_dict[str(target_fs)]
 
     main(args, detection_md, emb_model, classify_models, fa_model, device, 
-            label2name_df, target_fs, center_point)
+            celeb_db, target_fs, center_point)
 
     if args.output_video != '':
         export_video_face_recognition(args.output_frame, args.fps_video, 

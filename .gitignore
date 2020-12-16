@@ -6,7 +6,9 @@ scripts/
 images/
 weights/
 temp_data/
-toy_data/
+celeb_dataset/
+main_dataset/
+saved/
 
 # Byte-compiled / optimized / DLL files
 __pycache__/

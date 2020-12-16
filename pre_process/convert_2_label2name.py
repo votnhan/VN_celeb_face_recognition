@@ -1,7 +1,14 @@
+import sys
+sys.path.append('./')
 import argparse
 import os
 import pandas as pd
+from logger import get_logger_for_run
 from utils import read_json
+import logging
+from dotenv import load_dotenv
+
+load_dotenv()
 
 
 def convert_xlsx_2_label2name(xlsx_file_path, sheet_name):
@@ -16,12 +23,12 @@ def convert_xlsx_2_label2name(xlsx_file_path, sheet_name):
 def convert_2_seq_label2name(label_2_name_df, idx2label_dict):
     label2name = []
     for k, v in idx2label_dict.items():
-        chosen = label_2_name_df['label'] == v
+        chosen = label_2_name_df['label'] == int(v)
         name = list(label_2_name_df['name'][chosen])[0]
         label2name.append((int(k), name))
 
     label2name_df = pd.DataFrame(data=label2name, columns=['label', 'name'])
-    return label2name_df
+    return label2name_df, len(idx2label_dict.keys())
 
 
 if __name__ == '__main__':
@@ -32,17 +39,30 @@ if __name__ == '__main__':
                                 type=str)
     args_parser.add_argument('--seq_label2name', default='label2name_seq.txt', 
                                 type=str)                              
-    args_parser.add_argument('--idx2label', default='label2name_main.json', 
+    args_parser.add_argument('--alias2main_id', default='alias2main_id.json', 
                                 type=str)
+    args_parser.add_argument('--output_log', default='label2name_cvt', type=str)
+    args_parser.add_argument('--root_output', default='temp_data', type=str)
 
     args = args_parser.parse_args()
+    args.output_log = os.path.join(args.root_output, args.output_log)
+    logger, log_dir = get_logger_for_run(args.output_log)
+    logger.info('Convert file {} to label2name format'.format(args.xlsx))
+    for k, v in args.__dict__.items():
+        logger.info('--{}: {}'.format(k, v))
+    
+    args.main_label2name = os.path.join(args.root_output, args.main_label2name)
     label_2_name_df = convert_xlsx_2_label2name(args.xlsx, args.sheet_name)
-    label_2_name_df.to_csv(args.output_path, index=False)
-    print('Converted xlsx file {} to {} with label-name format'.format(args.xlsx, 
+    label_2_name_df.to_csv(args.main_label2name, index=False)
+    logger.info('Converted xlsx file {} to {} with label-name format'.format(args.xlsx, 
             args.main_label2name))
     
-    idx2label_dict = read_json(args.idx2label)
-    label_2_name_seq_df = convert_2_seq_label2name(label_2_name_df, idx2label_dict)
+    args.alias2main_id = os.path.join(args.root_output, args.alias2main_id)
+    args.seq_label2name = os.path.join(args.root_output, args.seq_label2name)
+    idx2label_dict = read_json(args.alias2main_id)
+    label_2_name_seq_df, n_celeb = convert_2_seq_label2name(label_2_name_df, idx2label_dict)
     label_2_name_seq_df.to_csv(args.seq_label2name, index=False)
-    print('Converted main label2name file {} to sequential label2name {}'.\
+    logger.info('Converted main label2name file {} to sequential label2name {}'.\
             format(args.main_label2name, args.seq_label2name))
+    logger.info('Number of celebrities now: {}'.format(n_celeb))
+

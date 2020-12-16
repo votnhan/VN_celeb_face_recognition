@@ -50,6 +50,7 @@ def choose_straight_face(flatten_dir, straight_dir):
     img_paths = glob.glob(path_pt)
     img_paths.sort()
     n_images = len(img_paths)
+    n_straight_faces = 0
     for idx, img_path in enumerate(img_paths):
         img_file = img_path.split('/')[-1]
         img_name, _ = img_file.split('.')
@@ -58,6 +59,9 @@ def choose_straight_face(flatten_dir, straight_dir):
             logger.info('{}/{}, Copying straight face {}'.format(idx, n_images, 
                             img_path))
             shutil.copy(img_path, new_img_path)
+            n_straight_faces += 1
+
+    logger.info('Number of straight faces: {}'.format(n_straight_faces))
 
 
 if __name__ == '__main__':
@@ -79,6 +83,10 @@ if __name__ == '__main__':
     args.straight_dir = os.path.join(args.root_output, args.straight_dir)
 
     logger, log_dir = get_logger_for_run(args.output_log)
+    logger.info('Flatten folder dataset {}'.format(args.root_dir))
+    for k, v in args.__dict__.items():
+        logger.info('--{}: {}'.format(k, v))
+    
     path_log = Path(log_dir)
     wrong_format = open(str(path_log / args.wrong_format), 'w')
     logger.info('Start convert dataset structure')

@@ -53,11 +53,12 @@
         "args": {
          "pretrained": true,
          "progress": true,
-         "n_classes": "fill final n new classes",
-         "freeze_weights": false,
-         "checkpoint_path": "please_feed_old_freezed_encoder.pth",
-         "n_new_classes": 0
-        },
+         "n_classes": "fill n classes of old encoder",
+         "freeze_weights": true,
+         "checkpoint_path": "please_feed_old_encoder.pth",
+         "n_new_classes": "fill n new classes of new encoder"
+        }
+      ,
         "some_models": [
             {
                 "name": "iresnet100",
@@ -89,7 +90,7 @@
     "optimizer":{
         "name": "Adam",
         "args":{
-            "lr": 6.25e-05,
+            "lr": 0.001,
             "weight_decay": 1e-04
         }   
     },
