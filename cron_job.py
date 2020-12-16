@@ -14,10 +14,12 @@ from demo_image import load_model_classify
 from align_face import center_point_dict
 from dotenv import load_dotenv
 from celeb_statistic import main
+from db import CelebDB, EmotionDB
 
 
 # load env
 load_dotenv()
+
 
 def check_free_resource(log_dir, least_memory):
     logger = logging.getLogger(os.environ['LOGGER_ID'])
@@ -103,7 +105,12 @@ def while_loop(args, detect_model, embedding_model, classify_models, emotion_mod
     # logger
     logger = logging.getLogger(os.environ['LOGGER_ID'])
     # label to name DB (for demostration)
-    label2name_df = pd.read_csv(args.label2name)
+    celeb_db = CelebDB(args.label2name, args.alias2main_id)
+    # idx to emotion DB
+    emotion_db = None
+    if args.recog_emotion:
+        emotion_db = EmotionDB(args.etag2idx_file)
+    
     # center point, face size after alignment
     target_fs = (args.target_face_size, args.target_face_size)
     center_point = center_point_dict[str(target_fs)]
@@ -155,7 +162,7 @@ def while_loop(args, detect_model, embedding_model, classify_models, emotion_mod
     
     logger.info('Start indexing video: {}'.format(dict_content['source_id']))
     tracker_df = main(args, detect_model, embedding_model, classify_models, 
-                        emotion_model, None, device, label2name_df, target_fs, 
+                        emotion_model, None, device, celeb_db, emotion_db, target_fs, 
                         center_point, frame_idxes)
     logger.info('End indexing video: {}'.format(dict_content['source_id']))
 
@@ -183,6 +190,8 @@ if __name__ == '__main__':
     args_parser = argparse.ArgumentParser(description='VN celebrity face and emotion')
     args_parser.add_argument('-m', '--classify_model', nargs='+', type=str)
     args_parser.add_argument('-l2n', '--label2name', default='label2name.csv', 
+                                type=str)
+    args_parser.add_argument('--alias2main_id', default='alias2main_id.json', 
                                 type=str)
     args_parser.add_argument('-id', '--input_dim_emb', default=512, type=int) 
     args_parser.add_argument('-nc', '--num_classes', default=1001, type=int)

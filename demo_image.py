@@ -420,9 +420,9 @@ if __name__ == '__main__':
                                         detection_md, fa_model, center_point, target_fs, 
                                         box_requirements, True)
     elif args.inference_method == 'par_fd_vs_aln':
-        bth_alg_faces, bth_chosen_boxes = parallel_detect_and_align(rgb_images, 
+        bth_alg_faces, bth_chosen_boxes, bth_chosen_faces = parallel_detect_and_align(rgb_images, 
                                         detection_md, center_point, target_fs,
-                                         True)
+                                            True)
     else:
         print('Do not support {} method.'.format(args.args.inference_method))
     
@@ -435,7 +435,7 @@ if __name__ == '__main__':
     np_image_recog = draw_boxes_on_image(np_image, chosen_boxes, names)
 
     if args.recog_emotion:
-        bth_emotions, bth_probs = recognize_emotion(bth_alg_faces, device, 
+        bth_emotions, bth_probs = recognize_emotion(bth_chosen_faces, device, 
                                 emt_model, trans_emotion_inf, emotion_db, 
                                 args.topk_emotions)
         np_image_recog = draw_emotions(np_image_recog, chosen_boxes, 

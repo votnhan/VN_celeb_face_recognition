@@ -45,7 +45,7 @@ def export_video_face_recognition(output_frame_dir, fps, output_path):
         
 
 def main(args, detect_model, embedding_model, classify_models, fa_model, device, 
-            celeb_db, target_fs, center_point):
+            target_fs, center_point):
     
     if not os.path.exists(args.output_frame):
         os.makedirs(args.output_frame)
@@ -57,7 +57,8 @@ def main(args, detect_model, embedding_model, classify_models, fa_model, device,
             'box_ratio': args.box_ratio
         }
     
-    
+    # Database for label to name
+    celeb_db = CelebDB(args.label2name, args.alias2main_id)
     # emotion model (if need)
     if args.recog_emotion:
         # Database for emotion
@@ -252,9 +253,6 @@ if __name__ == '__main__':
     args = args_parser.parse_args()
 
     device = args.device
-
-    # Database for label to name
-    celeb_db = CelebDB(args.label2name, args.alias2main_id)
     
     # Prepare 3 models, 
     # face detection model
@@ -284,7 +282,7 @@ if __name__ == '__main__':
     center_point = center_point_dict[str(target_fs)]
 
     main(args, detection_md, emb_model, classify_models, fa_model, device, 
-            celeb_db, target_fs, center_point)
+            target_fs, center_point)
 
     if args.output_video != '':
         export_video_face_recognition(args.output_frame, args.fps_video, 

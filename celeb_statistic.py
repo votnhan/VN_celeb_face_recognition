@@ -145,9 +145,6 @@ def main(args, detect_model, embedding_model, classify_models, emotion_model,
         df_columns.append('Bboxes')
     if args.recog_emotion:
         df_columns.append('Emotion')
-    
-    # idx2key emotion
-    idx2etag = load_pickle(args.etag2idx_file)['idx2key']
 
     # Overwrite old tracker file
     with open(args.output_tracker, 'w') as tracker_file:
