@@ -105,11 +105,11 @@ def while_loop(args, detect_model, embedding_model, classify_models, emotion_mod
     # logger
     logger = logging.getLogger(os.environ['LOGGER_ID'])
     # label to name DB (for demostration)
-    celeb_db = CelebDB(args.label2name, args.alias2main_id)
+    celeb_db = CelebDB(args.label2name, args.alias2main_id, args.include_name)
     # idx to emotion DB
     emotion_db = None
     if args.recog_emotion:
-        emotion_db = EmotionDB(args.etag2idx_file)
+        emotion_db = EmotionDB(args.etag2idx_file, args.include_emotion)
     
     # center point, face size after alignment
     target_fs = (args.target_face_size, args.target_face_size)
@@ -193,6 +193,8 @@ if __name__ == '__main__':
                                 type=str)
     args_parser.add_argument('--alias2main_id', default='alias2main_id.json', 
                                 type=str)
+    args_parser.add_argument('--include_name', action='store_true')
+    args_parser.add_argument('--include_emotion', action='store_true')
     args_parser.add_argument('-id', '--input_dim_emb', default=512, type=int) 
     args_parser.add_argument('-nc', '--num_classes', default=1001, type=int)
     args_parser.add_argument('-sfr', '--save_frame_recognized', 
