@@ -23,15 +23,16 @@ def detect_faces(detect_model, input_dir):
     img_path_pt = input_dir + '/*'
     img_paths = glob.glob(img_path_pt)
     img_paths.sort()
-    rgb_imgs, bgr_imgs = [], []
+    res_boxes, rgb_imgs, bgr_imgs =[], [], []
     for img_path in img_paths:
         bgr_img = cv2.imread(img_path)
         rgb_img = cv2.cvtColor(bgr_img, cv2.COLOR_BGR2RGB)
+        bth_bboxes, _ = detect_model.inference([rgb_img], landmark=False)
+        res_boxes.append(bth_bboxes[0])
         rgb_imgs.append(rgb_img)
         bgr_imgs.append(bgr_img)
     
-    bth_bboxes, _ = detect_model.inference(rgb_imgs, landmark=False)
-    return bth_bboxes, img_paths, bgr_imgs
+    return res_boxes, img_paths, bgr_imgs
 
 
 def visualize_faces_for_folder(detect_model, input_dir, output_dir):

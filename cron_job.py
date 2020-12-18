@@ -11,10 +11,11 @@ from logger import setup_logging
 from celeb_statistic import export_json_stat_dynamic_itv, export_json_stat_fixed_itv
 from utils import read_json, write_json, load_pickle
 from demo_image import load_model_classify
-from align_face import center_point_dict
+from pre_process import center_point_dict
 from dotenv import load_dotenv
 from celeb_statistic import main
-from db import CelebDB, EmotionDB
+import db
+import m3u8
 
 
 # load env
@@ -42,8 +43,20 @@ def parse_response(response, str_enc = 'utf-8'):
     return dict_content
 
 
-def parse_s3_url(s3_url):
-    return s3_url
+def parse_hls_url(args, hls_url):
+    chosen_res = tuple(args.chosen_res)
+    playlists = m3u8.load(hls_url).playlists
+    uri = playlists[0].uri
+    for playlist in playlists:
+        res = playlist.stream_info.resolution
+        if res == chosen_res:
+            uri = playlist.uri
+            break
+    
+    temp = hls_url.split('/')
+    prefix_link = '/'.join(temp[:-1])
+    final_uri = prefix_link + '/' + uri
+    return final_uri, chosen_res
 
 
 def setup_logger(args):
@@ -105,11 +118,11 @@ def while_loop(args, detect_model, embedding_model, classify_models, emotion_mod
     # logger
     logger = logging.getLogger(os.environ['LOGGER_ID'])
     # label to name DB (for demostration)
-    celeb_db = CelebDB(args.label2name, args.alias2main_id, args.include_name)
+    db.set_params_celeb_db(args.label2name, args.alias2main_id, args.include_name)
+    db.celeb_db.load_db()
     # idx to emotion DB
-    emotion_db = None
-    if args.recog_emotion:
-        emotion_db = EmotionDB(args.etag2idx_file, args.include_emotion)
+    db.set_params_emotion_db(args.etag2idx_file, args.emotion_label, args.include_emotion)
+    db.emotion_db.load_db()
     
     # center point, face size after alignment
     target_fs = (args.target_face_size, args.target_face_size)
@@ -142,7 +155,8 @@ def while_loop(args, detect_model, embedding_model, classify_models, emotion_mod
         return 
     
     video_url = dict_content['video_url']
-    stream_url = parse_s3_url(video_url)
+    stream_url, chosen_res = parse_hls_url(args, video_url)
+    logger.info('Resolution {} is chosen'.format(chosen_res))
     
     # check if stream_url work
     cap_check = cv2.VideoCapture(stream_url)
@@ -150,8 +164,8 @@ def while_loop(args, detect_model, embedding_model, classify_models, emotion_mod
         logger.info('Can not stream video from link {} .'.format(video_url))
         return
     else:
-        width  = cap_check.get(3)
-        height = cap_check.get(4)
+        width  = int(cap_check.get(3))
+        height = int(cap_check.get(4))
         logger.info('Video resolution: {}x{} px'.format(width, height))
 
     args.video_path = stream_url
@@ -159,11 +173,11 @@ def while_loop(args, detect_model, embedding_model, classify_models, emotion_mod
     # Set up tracker file
     output_tracker = '{}.csv'.format(dict_content['source_id'])
     args.output_tracker = os.path.join(log_dir, output_tracker)
-    
+        
     logger.info('Start indexing video: {}'.format(dict_content['source_id']))
     tracker_df = main(args, detect_model, embedding_model, classify_models, 
-                        emotion_model, None, device, celeb_db, emotion_db, target_fs, 
-                        center_point, frame_idxes)
+                        emotion_model, None, device, target_fs, center_point, 
+                        frame_idxes)
     logger.info('End indexing video: {}'.format(dict_content['source_id']))
 
     # Set up JSON file
@@ -175,7 +189,7 @@ def while_loop(args, detect_model, embedding_model, classify_models, emotion_mod
     logger.info('End doing statistic on video: {}'.format(dict_content['source_id']))
 
     logger.info('Start writing JSON file of: {}'.format(dict_content['source_id']))
-    # write_json(args.json_tracker, dict_track, True)
+    write_json(args.json_tracker, dict_track, True)
     store_res =  write_JSON_to_DB(dict_track, dict_content['source_id'])
     if store_res['result'] == '1':
         logging.info('-- Writing JSON file to DB successfully')
@@ -231,12 +245,16 @@ if __name__ == '__main__':
     args_parser.add_argument('-t2i', '--etag2idx_file', 
                         default='meta_data/emotion_recognition/etag2idx.pkl.keep', 
                         type=str)
+    args_parser.add_argument('--emotion_label', 
+                        default='meta_data/emotion_recognition/690_emotions.xls', 
+                        type=str)
     args_parser.add_argument('--topk_emotions', default=6, type=int)
     args_parser.add_argument('--n_frames', default=16, type=int)
     args_parser.add_argument('--multi_gpus_idx', nargs='+', type=int)
     args_parser.add_argument('--output_inf_dir', default='output_demo', type=str)
     args_parser.add_argument('--least_memory', default=9500, type=int)
     args_parser.add_argument('--queue_idx', default=2, type=int)
+    args_parser.add_argument('--chosen_res', nargs='+', type=int)
 
     args = args_parser.parse_args()
 

@@ -35,7 +35,7 @@ from data_loader import transforms_default, trans_emotion_inf
 from utils import convert_sec_to_max_time_quantity
 from logger import setup_logging
 from dotenv import load_dotenv
-from db import CelebDB, EmotionDB
+import db
 
 load_dotenv()
 
@@ -64,10 +64,11 @@ def export_json_stat_dynamic_itv(tracker_df, n_intervals, n_appear=4,
     
 
 def export_json_stat_fixed_itv(tracker_df, n_rows_in_itv, n_appear=4, 
-                                    unknown_name='Unknown'):
+                                unknown_name='Unknown'):
+
     n_rows = len(tracker_df['Time'])
     interval_counter = 0
-    dict_track = {}
+    list_track = []
     n_intervals = math.ceil(n_rows / n_rows_in_itv)
     for i in range(n_intervals):
         interval_counter += 1
@@ -78,12 +79,12 @@ def export_json_stat_fixed_itv(tracker_df, n_rows_in_itv, n_appear=4,
         df_for_itv = tracker_df.iloc[start_range: end_range]
         final_bboxes_dict, start_itv, end_itv = find_celeb_infor_in_interval(df_for_itv, 
                                                     unknown_name, n_appear)
-        dict_track[str(interval_counter)] = {
+        list_track.append({
             "interval": (start_itv, end_itv),
             "celebrities": final_bboxes_dict
-        }
+        })
 
-    return dict_track
+    return list_track
     
 
 def find_celeb_infor_in_interval(df_for_itv, unknown_name, n_appear):
@@ -92,33 +93,46 @@ def find_celeb_infor_in_interval(df_for_itv, unknown_name, n_appear):
                 df_for_itv['Time'], df_for_itv['Emotion'])
     for names_str, bboxes_str, time_s, emotions in zip_obj:
         time_s = float(time_s)
-        hms_time = convert_sec_to_max_time_quantity(time_s)
         list_names = ast.literal_eval(names_str)
         list_bboxes = ast.literal_eval(bboxes_str)
         list_emotions = ast.literal_eval(emotions)
         for name, bbox, emotion in zip(list_names, list_bboxes, list_emotions):
             bbox_item = {
-                        'time': hms_time,
+                        'time': time_s,
                         'bbox': bbox,
                         'emotions': emotion
                         }
             if name not in bboxes_dict:
-                bboxes_dict[name] = [bbox_item]
+                bboxes_dict[name] = {
+                    'frames_infor': [bbox_item]
+                }
             else:
-                bboxes_dict[name] += [bbox_item]
+                bboxes_dict[name]['frames_infor'] += [bbox_item]
 
     final_bboxes_dict = {}
     for k, v in bboxes_dict.items():
-        if (k != unknown_name) and (len(v) >= n_appear):
+        if (k != unknown_name) and (len(v['frames_infor']) >= n_appear):
             final_bboxes_dict[k] = v
+
+    remap_data = []
+    for k, v in final_bboxes_dict.items():
+        celeb_infor = db.celeb_db.get_infor_of_celeb(int(k))
+        for fr_info in v['frames_infor']:
+            emt_info = [db.emotion_db.get_full_infor_of_emotion(int(x)) for x in fr_info['emotions']]
+            fr_info['emotions'] = emt_info
+
+        remap_data.append({
+            'celeb_infor': celeb_infor,
+            'frames_infor': v['frames_infor']
+        })
             
-    start_itv = convert_sec_to_max_time_quantity(float(df_for_itv['Time'].iloc[0]))
-    end_itv = convert_sec_to_max_time_quantity(float(df_for_itv['Time'].iloc[-1]))
-    return final_bboxes_dict, start_itv, end_itv
+    start_itv = float(df_for_itv['Time'].iloc[0])
+    end_itv = float(df_for_itv['Time'].iloc[-1])
+    return remap_data, start_itv, end_itv
 
 
 def main(args, detect_model, embedding_model, classify_models, emotion_model, 
-            fa_model, device, celeb_db, emotion_db, target_fs, center_point, 
+            fa_model, device, target_fs, center_point, 
             frame_idxes):
 
     if args.inference_method == 'seq_fd_vs_aln':
@@ -127,7 +141,7 @@ def main(args, detect_model, embedding_model, classify_models, emotion_model,
             'box_ratio': args.box_ratio
         }
     
-    logger = logging.getLogger(args.logger_id)
+    logger = logging.getLogger(os.environ['LOGGER_ID'])
 
     # Create threshold
     if args.local_thresholds != '':
@@ -215,11 +229,11 @@ def main(args, detect_model, embedding_model, classify_models, emotion_model,
 
 
         bth_names = recognize_celeb(bth_alg_faces, device, embedding_model, 
-                        classify_models, transforms_default, celeb_db, threshold)
+                        classify_models, transforms_default, db.celeb_db, threshold)
 
         if args.recog_emotion:
             bth_emotions, bth_probs = recognize_emotion(bth_chosen_faces, device, 
-                                    emotion_model, trans_emotion_inf, emotion_db,
+                                    emotion_model, trans_emotion_inf, db.emotion_db,
                                     args.topk_emotions)
 
         if args.save_frame_recognized:
@@ -306,6 +320,8 @@ if __name__ == '__main__':
                                 type=str)
     args_parser.add_argument('--alias2main_id', default='alias2main_id.json', 
                                 type=str)
+    args_parser.add_argument('--include_name', action='store_true')
+    args_parser.add_argument('--include_emotion', action='store_true')
     args_parser.add_argument('-dv', '--device', default='cuda:0', type=str) 
     args_parser.add_argument('-id', '--input_dim_emb', default=512, type=int) 
     args_parser.add_argument('-nc', '--num_classes', default=1001, type=int)
@@ -348,13 +364,15 @@ if __name__ == '__main__':
     args_parser.add_argument('-t2i', '--etag2idx_file', 
                         default='meta_data/emotion_recognition/etag2idx.pkl.keep', 
                         type=str)
+    args_parser.add_argument('--emotion_label', 
+                        default='meta_data/emotion_recognition/690_emotions.xls', 
+                        type=str)
     args_parser.add_argument('--topk_emotions', default=6, type=int)
     args_parser.add_argument('--n_frames', default=16, type=int)
     args_parser.add_argument('--s3_video', action='store_true')
     args_parser.add_argument('--s3_video_infor', default='', type=str)
     args_parser.add_argument('--multi_gpus_idx', nargs='+', type=int)
     args_parser.add_argument('--output_inf_dir', default='output_demo', type=str)
-    args_parser.add_argument('--logger_id', default='celeb_statistic', type=str)
 
     args = args_parser.parse_args()
 
@@ -387,7 +405,8 @@ if __name__ == '__main__':
         gpu_idx = list(args.multi_gpus_idx)
 
     # Database for label to name
-    celeb_db = CelebDB(args.label2name, args.alias2main_id)
+    db.set_params_celeb_db(args.label2name, args.alias2main_id, args.include_name)
+    db.celeb_db.load_db()
 
     # Prepare 3 models
     # face detection model
@@ -406,14 +425,12 @@ if __name__ == '__main__':
     emb_model = getattr(model_md, args.encoder)(**enc_args)
     logger.info('Loading embedding model {} is done ...'.format(args.encoder))
 
-    # emotion model (if need)
-    emotion_db = None
-    if args.recog_emotion:
-        # Database for emotion
-        emotion_db = EmotionDB(args.etag2idx_file)
-        emt_args = read_json(args.emotion_args)
-        emt_model = getattr(model_md, args.emotion)(**emt_args).to(device)
-        logger.info('Loading emotion model {} is done ...'.format(args.emotion))
+    # emotion model
+    db.set_params_emotion_db(args.etag2idx_file, args.emotion_label, args.include_emotion)
+    db.emotion_db.load_db()
+    emt_args = read_json(args.emotion_args)
+    emt_model = getattr(model_md, args.emotion)(**emt_args).to(device)
+    logger.info('Loading emotion model {} is done ...'.format(args.emotion))
     
 
     # classify from embedding model
@@ -421,7 +438,7 @@ if __name__ == '__main__':
     classify_models = []
     for path in cls_model_paths:
         classify_model = model_md.MLPModel(args.input_dim_emb, args.num_classes)
-        load_model_classify(path, classify_model, args.logger_id)
+        load_model_classify(path, classify_model, os.environ['LOGGER_ID'])
         classify_models.append(classify_model)
 
     logger.info('Loading mlp models is done ...')
@@ -450,8 +467,7 @@ if __name__ == '__main__':
     if not os.path.exists(args.output_tracker):
         logger.info('Create tracker file {} and start indexing'.format(args.output_tracker))
         tracker_df = main(args, detection_md, emb_model, classify_models, emt_model, 
-                            fa_model, device, celeb_db, emotion_db, target_fs, 
-                            center_point, frame_idxes)
+                            fa_model, device, target_fs, center_point, frame_idxes)
     else:
         logger.info('Re-use tracker file {}'.format(args.output_tracker))
         tracker_df = pd.read_csv(args.output_tracker)

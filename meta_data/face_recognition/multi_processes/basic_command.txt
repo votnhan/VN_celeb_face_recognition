@@ -1,0 +1,23 @@
+python celeb_statistic.py \
+-m \
+./weights/mlp/ensembles_straight/model_1.pth \
+./weights/mlp/ensembles_straight/model_2.pth \
+./weights/mlp/ensembles_straight/model_3.pth \
+./weights/mlp/ensembles_straight/model_4.pth \
+-l2n meta_data/face_recognition/label2name_52_cls.txt \
+--alias2main_id meta_data/face_recognition/alias2main_id.json \
+-nc 52 \
+-enc iresnet100 \
+-fidx 1 6 11 16 \
+-ign 1001 \
+-det RetinaFace \
+-dargs cfg/detection/retina_face.json \
+--inference_method par_fd_vs_aln \
+--recog_threshold 0.9 \
+-tap 12 \
+--track_bbox \
+--topk_emotions 6 \
+--recog_emotion \
+--log_step 128 \
+--statistic_mode no_statistic \
+--n_frames 64 \

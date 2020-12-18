@@ -9,6 +9,8 @@ temp_data/
 celeb_dataset/
 main_dataset/
 saved/
+temp_code/
+
 
 # Byte-compiled / optimized / DLL files
 __pycache__/

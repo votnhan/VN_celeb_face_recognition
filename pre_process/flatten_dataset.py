@@ -29,7 +29,6 @@ def convert_folder_2_flatten(root_dir, output_dir, wrong_format):
             continue
 
         logger.info('-----{}/{}-----'.format(idx, n_images))
-        logger.info('Copying file {}'.format(image_path))
         label, image_file = image_path.split('/')[-2: ]
         image_name, ext = image_file.split('.')
         if ext not in ['png', 'jpg', 'jpeg']:
@@ -39,6 +38,7 @@ def convert_folder_2_flatten(root_dir, output_dir, wrong_format):
         new_image_file = '{}_{}.{}'.format(label, image_name, ext)
         new_img_path = os.path.join(output_dir, new_image_file)
         if not os.path.exists(new_img_path):
+            logger.info('Copying file {}'.format(image_path))
             shutil.copyfile(image_path, new_img_path)
 
     print('Samples wrong format: {}'.format(wrong_format_counter))
@@ -56,10 +56,11 @@ def choose_straight_face(flatten_dir, straight_dir):
         img_name, _ = img_file.split('.')
         if 'a' in img_name.lower():
             new_img_path = os.path.join(straight_dir, img_file)
-            logger.info('{}/{}, Copying straight face {}'.format(idx, n_images, 
-                            img_path))
-            shutil.copy(img_path, new_img_path)
-            n_straight_faces += 1
+            if not os.path.exists(new_img_path):
+                logger.info('{}/{}, Copying straight face {}'.format(idx, n_images, 
+                                img_path))
+                shutil.copy(img_path, new_img_path)
+                n_straight_faces += 1
 
     logger.info('Number of straight faces: {}'.format(n_straight_faces))
 
